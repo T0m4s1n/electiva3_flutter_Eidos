@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 
 class AnimatedHeader extends StatefulWidget {
   final VoidCallback? onLogin;
   final VoidCallback? onCreateChat;
   final Function(String)? onChatSelected;
   final List<Map<String, String>>? recentChats; // Add recent chats parameter
+  final bool isLoggedIn;
+  final String userName;
+  final String userEmail;
+  final String? userAvatarUrl;
+  final VoidCallback? onLogout;
+  final VoidCallback? onEditProfile;
 
   const AnimatedHeader({
     super.key,
@@ -12,6 +19,12 @@ class AnimatedHeader extends StatefulWidget {
     this.onCreateChat,
     this.onChatSelected,
     this.recentChats,
+    this.isLoggedIn = false,
+    this.userName = '',
+    this.userEmail = '',
+    this.userAvatarUrl,
+    this.onLogout,
+    this.onEditProfile,
   });
 
   @override
@@ -163,34 +176,97 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
 
                 const SizedBox(width: 20),
 
-                // App title/logo
-                const Expanded(
-                  child: Text(
-                    'Eidos',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
+                // App logo with dynamiccube icon
+                SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: Lottie.asset(
+                    'assets/fonts/svgs/dynamiccube.json',
+                    fit: BoxFit.contain,
+                    repeat: true,
                   ),
                 ),
 
-                // User avatar placeholder
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.black87),
-                  ),
-                  child: const Icon(
-                    Icons.person_outline,
-                    color: Colors.grey,
-                    size: 18,
-                  ),
-                ),
+                const Spacer(),
+
+                // User avatar or login button
+                widget.isLoggedIn
+                    ? GestureDetector(
+                        onTap: _toggleMenu,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.black87),
+                          ),
+                          child:
+                              widget.userAvatarUrl != null &&
+                                  widget.userAvatarUrl!.isNotEmpty
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Image.network(
+                                    widget.userAvatarUrl!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return widget.userName.isNotEmpty
+                                          ? Center(
+                                              child: Text(
+                                                widget.userName[0]
+                                                    .toUpperCase(),
+                                                style: const TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.person_outline,
+                                              color: Colors.grey,
+                                              size: 18,
+                                            );
+                                    },
+                                  ),
+                                )
+                              : widget.userName.isNotEmpty
+                              ? Center(
+                                  child: Text(
+                                    widget.userName[0].toUpperCase(),
+                                    style: const TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.person_outline,
+                                  color: Colors.grey,
+                                  size: 18,
+                                ),
+                        ),
+                      )
+                    : GestureDetector(
+                        onTap: widget.onLogin,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.black87),
+                          ),
+                          child: const Icon(
+                            Icons.person_outline,
+                            color: Colors.grey,
+                            size: 18,
+                          ),
+                        ),
+                      ),
               ],
             ),
           ),
@@ -225,7 +301,7 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Auth buttons section
+                              // Account section
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
@@ -240,15 +316,78 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                   ),
                                   const SizedBox(height: 16),
 
-                                  // Login button
-                                  _buildSkeletonButton(
-                                    icon: Icons.login,
-                                    text: 'Log In',
-                                    onTap: () {
-                                      widget.onLogin?.call();
-                                      _toggleMenu();
-                                    },
-                                  ),
+                                  if (widget.isLoggedIn) ...[
+                                    // User info
+                                    Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            widget.userName.isNotEmpty
+                                                ? widget.userName
+                                                : 'User',
+                                            style: const TextStyle(
+                                              fontFamily: 'Poppins',
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.black87,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            widget.userEmail,
+                                            style: TextStyle(
+                                              fontFamily: 'Poppins',
+                                              fontSize: 14,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+
+                                    // Edit profile button
+                                    _buildSkeletonButton(
+                                      icon: Icons.edit_outlined,
+                                      text: 'Edit Profile',
+                                      onTap: () {
+                                        widget.onEditProfile?.call();
+                                        _toggleMenu();
+                                      },
+                                    ),
+
+                                    const SizedBox(height: 12),
+
+                                    // Logout button
+                                    _buildSkeletonButton(
+                                      icon: Icons.logout,
+                                      text: 'Log Out',
+                                      onTap: () {
+                                        widget.onLogout?.call();
+                                        _toggleMenu();
+                                      },
+                                    ),
+                                  ] else ...[
+                                    // Login button
+                                    _buildSkeletonButton(
+                                      icon: Icons.login,
+                                      text: 'Log In',
+                                      onTap: () {
+                                        widget.onLogin?.call();
+                                        _toggleMenu();
+                                      },
+                                    ),
+                                  ],
 
                                   const SizedBox(height: 12),
 

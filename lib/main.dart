@@ -1,13 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'widgets/animated_header.dart';
 import 'widgets/chat_button.dart';
 import 'widgets/loading_screen.dart';
 import 'widgets/chat_view.dart';
 import 'widgets/auth_view.dart';
+import 'widgets/edit_profile_view.dart';
+import 'services/auth_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    // Load environment variables
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    debugPrint('Error loading .env file: $e');
+    // If .env fails, we cannot proceed without credentials
+    throw Exception(
+      'Failed to load environment variables. Please check your .env file.',
+    );
+  }
+
+  // Initialize Supabase
+  await Supabase.initialize(
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+  );
+
   runApp(const MyApp());
 }
 
@@ -81,7 +104,12 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   bool _showChatView = false;
   bool _showAuthView = false;
+  bool _showEditProfile = false;
   bool _isLoginView = true;
+  bool _isLoggedIn = false;
+  String _userName = '';
+  String _userEmail = '';
+  String? _userAvatarUrl;
 
   @override
   void initState() {
@@ -143,13 +171,36 @@ class _MyHomePageState extends State<MyHomePage> {
       body: SafeArea(
         child: Column(
           children: [
-            // Custom animated header - only show when not in auth view
-            if (!_showAuthView)
+            // Custom animated header - only show when not in auth view or edit profile
+            if (!_showAuthView && !_showEditProfile)
               AnimatedHeader(
+                isLoggedIn: _isLoggedIn,
+                userName: _userName,
+                userEmail: _userEmail,
+                userAvatarUrl: _userAvatarUrl,
                 onLogin: () {
                   setState(() {
                     _showAuthView = true;
                     _isLoginView = true;
+                  });
+                },
+                onLogout: () async {
+                  try {
+                    await AuthService.signOut();
+                    setState(() {
+                      _isLoggedIn = false;
+                      _userName = '';
+                      _userEmail = '';
+                      _userAvatarUrl = null;
+                    });
+                  } catch (e) {
+                    // Handle logout error if needed
+                    debugPrint('Logout error: $e');
+                  }
+                },
+                onEditProfile: () {
+                  setState(() {
+                    _showEditProfile = true;
                   });
                 },
                 onCreateChat: () {
@@ -192,7 +243,65 @@ class _MyHomePageState extends State<MyHomePage> {
                           _isLoginView = !_isLoginView;
                         });
                       },
+                      onLoginSuccess: (name, email) async {
+                        setState(() {
+                          _isLoggedIn = true;
+                          _userName = name;
+                          _userEmail = email;
+                          _showAuthView = false;
+                        });
+
+                        // Load user profile to get avatar URL
+                        try {
+                          final profile = await AuthService.getUserProfile();
+                          if (profile != null && mounted) {
+                            setState(() {
+                              _userAvatarUrl = profile['avatar_url'];
+                            });
+                          }
+                        } catch (e) {
+                          debugPrint('Error loading user profile: $e');
+                        }
+                      },
                       isLogin: _isLoginView,
+                    )
+                  : _showEditProfile
+                  ? EditProfileView(
+                      currentName: _userName,
+                      currentEmail: _userEmail,
+                      onBack: () {
+                        setState(() {
+                          _showEditProfile = false;
+                        });
+                      },
+                      onSaveProfile: (name, email, bio) async {
+                        setState(() {
+                          _userName = name;
+                          _userEmail = email;
+                          _showEditProfile = false;
+                        });
+
+                        // Refresh user profile to get updated avatar
+                        try {
+                          final profile = await AuthService.getUserProfile();
+                          if (profile != null && mounted) {
+                            setState(() {
+                              _userAvatarUrl = profile['avatar_url'];
+                            });
+                          }
+                        } catch (e) {
+                          debugPrint('Error refreshing user profile: $e');
+                        }
+                      },
+                      onDeleteAccount: () {
+                        setState(() {
+                          _isLoggedIn = false;
+                          _userName = '';
+                          _userEmail = '';
+                          _userAvatarUrl = null;
+                          _showEditProfile = false;
+                        });
+                      },
                     )
                   : _showChatView
                   ? ChatView(
