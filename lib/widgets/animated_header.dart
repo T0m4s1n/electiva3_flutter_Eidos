@@ -215,74 +215,79 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                         top: BorderSide(color: Colors.black87, width: 1),
                       ),
                     ),
-                    child: SingleChildScrollView(
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Auth buttons section
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                const Text(
-                                  'Account',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(context).size.height * 0.6,
+                      ),
+                      child: SingleChildScrollView(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Auth buttons section
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  const Text(
+                                    'Account',
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 16),
+                                  const SizedBox(height: 16),
 
-                                // Login button
-                                _buildSkeletonButton(
-                                  icon: Icons.login,
-                                  text: 'Log In',
-                                  onTap: () {
-                                    widget.onLogin?.call();
-                                    _toggleMenu();
-                                  },
-                                ),
-
-                                const SizedBox(height: 12),
-
-                                // Create new chat button
-                                _buildSkeletonButton(
-                                  icon: Icons.add_circle_outline,
-                                  text: 'Create New Chat',
-                                  onTap: () {
-                                    widget.onCreateChat?.call();
-                                    _toggleMenu();
-                                  },
-                                  isPrimary: true,
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 24),
-
-                            // Recent chats section
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Recent Chats',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
+                                  // Login button
+                                  _buildSkeletonButton(
+                                    icon: Icons.login,
+                                    text: 'Log In',
+                                    onTap: () {
+                                      widget.onLogin?.call();
+                                      _toggleMenu();
+                                    },
                                   ),
-                                ),
-                                const SizedBox(height: 16),
 
-                                // Chat list or empty state
-                                _buildChatSection(),
-                              ],
-                            ),
-                          ],
+                                  const SizedBox(height: 12),
+
+                                  // Create new chat button
+                                  _buildSkeletonButton(
+                                    icon: Icons.add_circle_outline,
+                                    text: 'Create New Chat',
+                                    onTap: () {
+                                      widget.onCreateChat?.call();
+                                      // Don't close the menu when creating a new chat
+                                    },
+                                    isPrimary: true,
+                                  ),
+                                ],
+                              ),
+
+                              const SizedBox(height: 24),
+
+                              // Recent chats section
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Recent Chats',
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+
+                                  // Chat list or empty state
+                                  _buildChatSection(),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),

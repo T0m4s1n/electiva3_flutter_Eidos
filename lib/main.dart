@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:lottie/lottie.dart';
 import 'widgets/animated_header.dart';
+import 'widgets/chat_button.dart';
+import 'widgets/loading_screen.dart';
+import 'widgets/chat_view.dart';
 
 void main() {
   runApp(const MyApp());
@@ -14,6 +18,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         // Set Poppins as the default font family for the entire app
         fontFamily: 'Poppins',
@@ -73,16 +78,47 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  bool _showChatView = false;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  @override
+  void initState() {
+    super.initState();
+    _showInitialLoading();
+  }
+
+  void _showInitialLoading() async {
+    // Show loading screen for 2 seconds on app startup
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) {
+      Navigator.of(context).push(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const LoadingScreen(
+                message: 'Welcome to Eidos',
+                duration: Duration(seconds: 2),
+              ),
+          transitionDuration: const Duration(milliseconds: 300),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
+      );
+    }
+    await Future.delayed(const Duration(seconds: 2));
+  }
+
+  void _showLoadingOverlay(String message) {
+    LoadingOverlay.show(
+      context,
+      message: message,
+      duration: const Duration(seconds: 2),
+    );
+
+    // Hide loading after 2 seconds
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        LoadingOverlay.hide();
+      }
     });
   }
 
@@ -107,16 +143,15 @@ class _MyHomePageState extends State<MyHomePage> {
             // Custom animated header
             AnimatedHeader(
               onLogin: () {
-                // TODO: Implement login functionality
-                debugPrint('Login button tapped');
+                _showLoadingOverlay('Logging in...');
               },
               onCreateChat: () {
-                // TODO: Implement create new chat functionality
-                debugPrint('Create new chat button tapped');
+                setState(() {
+                  _showChatView = true;
+                });
               },
               onChatSelected: (chatId) {
-                // TODO: Implement chat selection functionality
-                debugPrint('Chat selected: $chatId');
+                _showLoadingOverlay('Opening chat...');
               },
               recentChats: [], // Empty list to show empty state
               // Uncomment below to show sample chats:
@@ -138,49 +173,62 @@ class _MyHomePageState extends State<MyHomePage> {
 
             // Main content
             Expanded(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      const Text(
-                        'Eidos Chat',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+              child: _showChatView
+                  ? ChatView(
+                      onBack: () {
+                        setState(() {
+                          _showChatView = false;
+                        });
+                      },
+                    )
+                  : Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: <Widget>[
+                            const SizedBox(height: 20),
+                            // Lottie animation
+                            SizedBox(
+                              width: 200,
+                              height: 200,
+                              child: Lottie.asset(
+                                'assets/fonts/svgs/svgsquare.json',
+                                fit: BoxFit.contain,
+                                repeat: true,
+                              ),
+                            ),
+                            const SizedBox(height: 30),
+                            const Text(
+                              'Start a chat to start working on new projects and documents',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 18,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black87,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 30),
+                            // Chat button
+                            ChatButton(
+                              text: 'Start New Chat',
+                              icon: Icons.chat_bubble_outline,
+                              isPrimary: true,
+                              onTap: () {
+                                setState(() {
+                                  _showChatView = true;
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 20),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 20),
-                      const Text(
-                        'Welcome to your AI assistant',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 18,
-                          color: Colors.grey,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      const Text('You have pushed the button this many times:'),
-                      Text(
-                        '$_counter',
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+                    ),
             ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        backgroundColor: Colors.black87,
-        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
