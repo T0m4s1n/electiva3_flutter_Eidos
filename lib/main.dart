@@ -5,6 +5,7 @@ import 'widgets/animated_header.dart';
 import 'widgets/chat_button.dart';
 import 'widgets/loading_screen.dart';
 import 'widgets/chat_view.dart';
+import 'widgets/auth_view.dart';
 
 void main() {
   runApp(const MyApp());
@@ -79,6 +80,8 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   bool _showChatView = false;
+  bool _showAuthView = false;
+  bool _isLoginView = true;
 
   @override
   void initState() {
@@ -140,40 +143,58 @@ class _MyHomePageState extends State<MyHomePage> {
       body: SafeArea(
         child: Column(
           children: [
-            // Custom animated header
-            AnimatedHeader(
-              onLogin: () {
-                _showLoadingOverlay('Logging in...');
-              },
-              onCreateChat: () {
-                setState(() {
-                  _showChatView = true;
-                });
-              },
-              onChatSelected: (chatId) {
-                _showLoadingOverlay('Opening chat...');
-              },
-              recentChats: [], // Empty list to show empty state
-              // Uncomment below to show sample chats:
-              // recentChats: [
-              //   {
-              //     'id': 'chat_1',
-              //     'title': 'AI Assistant Chat',
-              //     'lastMessage': 'How can I help you today?',
-              //     'time': '2m',
-              //   },
-              //   {
-              //     'id': 'chat_2',
-              //     'title': 'Code Review Discussion',
-              //     'lastMessage': 'The implementation looks good',
-              //     'time': '1h',
-              //   },
-              // ],
-            ),
+            // Custom animated header - only show when not in auth view
+            if (!_showAuthView)
+              AnimatedHeader(
+                onLogin: () {
+                  setState(() {
+                    _showAuthView = true;
+                    _isLoginView = true;
+                  });
+                },
+                onCreateChat: () {
+                  setState(() {
+                    _showChatView = true;
+                  });
+                },
+                onChatSelected: (chatId) {
+                  _showLoadingOverlay('Opening chat...');
+                },
+                recentChats: [], // Empty list to show empty state
+                // Uncomment below to show sample chats:
+                // recentChats: [
+                //   {
+                //     'id': 'chat_1',
+                //     'title': 'AI Assistant Chat',
+                //     'lastMessage': 'How can I help you today?',
+                //     'time': '2m',
+                //   },
+                //   {
+                //     'id': 'chat_2',
+                //     'title': 'Code Review Discussion',
+                //     'lastMessage': 'The implementation looks good',
+                //     'time': '1h',
+                //   },
+                // ],
+              ),
 
             // Main content
             Expanded(
-              child: _showChatView
+              child: _showAuthView
+                  ? AuthView(
+                      onBack: () {
+                        setState(() {
+                          _showAuthView = false;
+                        });
+                      },
+                      onToggleMode: () {
+                        setState(() {
+                          _isLoginView = !_isLoginView;
+                        });
+                      },
+                      isLogin: _isLoginView,
+                    )
+                  : _showChatView
                   ? ChatView(
                       onBack: () {
                         setState(() {
