@@ -38,6 +38,9 @@ dependencies:
   supabase_flutter: ^2.8.0
   flutter_dotenv: ^5.1.0
   image_picker: ^1.0.4
+  
+  # GetX for state management, dependency injection, and routing
+  get: ^4.6.6
 
 dev_dependencies:
   flutter_test:
