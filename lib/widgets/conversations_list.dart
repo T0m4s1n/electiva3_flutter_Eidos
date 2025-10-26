@@ -39,18 +39,8 @@ class _ConversationsListState extends State<ConversationsList> {
 
   Future<void> _startNewChat() async {
     try {
-      // Create new conversation
-      final ConversationLocal conversation =
-          await ChatService.createConversation(
-            title: 'New Chat',
-            model: 'gpt-4o-mini',
-          );
-
-      // Load it in chat controller
-      await chatController.loadConversation(conversation.id);
-
-      // Show chat view
-      navController.showChat();
+      // Use the controller's startNewChat method which handles everything
+      await chatController.startNewChat();
 
       // Refresh conversations list
       await _loadConversations();

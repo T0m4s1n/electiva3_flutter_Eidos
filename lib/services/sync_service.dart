@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:flutter/foundation.dart';
 import '../services/chat_database.dart';
 
 class SyncService {
@@ -13,15 +14,38 @@ class SyncService {
   /// - Sube (push) a nube por upsert.
   /// - Hace un pull para dejar local = nube.
   Future<void> onLogin(String userId) async {
-    await _promoteLocalAnonToUser(userId);
-    await pushAll(userId);
-    await pullAll(userId);
+    debugPrint(
+      '🔄 SyncService.onLogin - Starting login sync for user: $userId',
+    );
+
+    try {
+      debugPrint('🔄 Step 1: Promoting local anonymous data to user');
+      await _promoteLocalAnonToUser(userId);
+
+      debugPrint('🔄 Step 2: Pushing all local data to cloud');
+      await pushAll(userId);
+
+      debugPrint('🔄 Step 3: Pulling all cloud data to local');
+      await pullAll(userId);
+
+      debugPrint('✅ SyncService.onLogin - Login sync completed successfully');
+    } catch (e) {
+      debugPrint('❌ SyncService.onLogin - Error during login sync: $e');
+      rethrow;
+    }
   }
 
   /// 2) Al hacer logout:
   /// - Borra absolutamente TODO lo local (conversaciones y mensajes).
   Future<void> onLogout() async {
-    await ChatDatabase.purgeAllLocal();
+    debugPrint('🗑️ SyncService.onLogout - Starting logout cleanup');
+    try {
+      await ChatDatabase.purgeAllLocal();
+      debugPrint('✅ SyncService.onLogout - Local data purged successfully');
+    } catch (e) {
+      debugPrint('❌ SyncService.onLogout - Error purging local data: $e');
+      rethrow;
+    }
   }
 
   /// Promueve datos locales anónimos (user_id NULL) a una cuenta concreta.
@@ -65,6 +89,9 @@ class SyncService {
 
   /// Sube TODO de un usuario: conversaciones + mensajes (pending/ok) — idempotente por upsert.
   Future<void> pushAll(String userId) async {
+    debugPrint(
+      '📤 SyncService.pushAll - Starting push to cloud for user: $userId',
+    );
     final Database db = await ChatDatabase.instance;
 
     // Conversaciones del usuario
@@ -73,6 +100,8 @@ class SyncService {
       where: 'user_id = ?',
       whereArgs: [userId],
     );
+
+    debugPrint('📤 Found ${convs.length} conversations to push');
 
     if (convs.isNotEmpty) {
       // Mapea a payload para Supabase
@@ -93,6 +122,7 @@ class SyncService {
           .toList();
 
       await supabase.from('conversations').upsert(payload, onConflict: 'id');
+      debugPrint('✅ Pushed ${convs.length} conversations to cloud');
     }
 
     // Mensajes del usuario (de las conversaciones anteriores)
@@ -106,9 +136,12 @@ class SyncService {
         convIds,
       );
 
+      debugPrint('📤 Found ${msgs.length} messages to push');
+
       if (msgs.isNotEmpty) {
         // Subir en lotes para evitar payloads gigantes
         const int batchSize = 500;
+        int totalPushed = 0;
         for (int i = 0; i < msgs.length; i += batchSize) {
           final List<Map<String, Object?>> slice = msgs.sublist(
             i,
@@ -131,6 +164,10 @@ class SyncService {
               .toList();
 
           await supabase.from('messages').upsert(payload, onConflict: 'id');
+          totalPushed += slice.length;
+          debugPrint(
+            '📤 Pushed batch ${(i ~/ batchSize) + 1}: ${slice.length} messages',
+          );
         }
 
         // Marcar local como synced
@@ -138,12 +175,20 @@ class SyncService {
             .map((Map<String, Object?> m) => m['id'] as String)
             .toList();
         await ChatDatabase.markMessagesSynced(ids);
+        debugPrint(
+          '✅ Pushed $totalPushed messages to cloud and marked as synced',
+        );
       }
     }
+
+    debugPrint('✅ SyncService.pushAll - Push to cloud completed successfully');
   }
 
   /// Baja TODO desde la nube para un usuario y reemplaza/merguea local (idempotente).
   Future<void> pullAll(String userId) async {
+    debugPrint(
+      '📥 SyncService.pullAll - Starting pull from cloud for user: $userId',
+    );
     final Database db = await ChatDatabase.instance;
 
     // 1) Conversations
@@ -202,14 +247,31 @@ class SyncService {
 
   /// Sincronización incremental - solo datos pendientes
   Future<void> syncPending() async {
+    debugPrint('🔄 SyncService.syncPending - Starting background sync');
     final String? userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    if (userId == null) {
+      debugPrint(
+        '⚠️ SyncService.syncPending - No user logged in, skipping sync',
+      );
+      return;
+    }
 
-    // Push datos pendientes
-    await _pushPendingData(userId);
+    try {
+      debugPrint('🔄 Step 1: Pushing pending data to cloud');
+      await _pushPendingData(userId);
 
-    // Pull datos nuevos desde la nube
-    await _pullNewData(userId);
+      debugPrint('🔄 Step 2: Pulling new data from cloud');
+      await _pullNewData(userId);
+
+      debugPrint(
+        '✅ SyncService.syncPending - Background sync completed successfully',
+      );
+    } catch (e) {
+      debugPrint(
+        '❌ SyncService.syncPending - Error during background sync: $e',
+      );
+      // No rethrow para no afectar la funcionalidad principal
+    }
   }
 
   /// Push solo datos pendientes

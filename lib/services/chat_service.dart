@@ -56,10 +56,16 @@ class ChatService {
     final String now = DateTime.now().toUtc().toIso8601String();
     await _updateConversationTimestamp(conversationId, now);
 
-    // Si el usuario está logueado, sincronizar
+    debugPrint('addMessage - Message saved locally: ${message.id}');
+    debugPrint('addMessage - Current user: ${AuthService.currentUser?.id}');
+
+    // Si el usuario está logueado, sincronizar en background (no bloquear)
     final String? userId = AuthService.currentUser?.id;
     if (userId != null) {
-      await _syncService.syncPending();
+      // Sincronizar en background para no bloquear la respuesta
+      _syncService.syncPending().catchError((e) {
+        debugPrint('Background sync error: $e');
+      });
     }
 
     return message;
@@ -224,12 +230,21 @@ class ChatService {
     required String conversationId,
     required String text,
   }) async {
-    return addMessage(
+    debugPrint('createUserMessage - Conversation ID: $conversationId');
+    debugPrint('createUserMessage - Text: $text');
+    debugPrint(
+      'createUserMessage - Current user: ${AuthService.currentUser?.id}',
+    );
+
+    final message = await addMessage(
       conversationId: conversationId,
       role: 'user',
       content: {'text': text},
       status: 'ok',
     );
+
+    debugPrint('createUserMessage - Created message ID: ${message.id}');
+    return message;
   }
 
   /// Crear un mensaje del asistente
@@ -292,10 +307,18 @@ class ChatService {
 
     final List<MessageLocal> messages = await getMessages(conversationId);
 
+    debugPrint('getContextForAI - Conversation ID: $conversationId');
+    debugPrint('getContextForAI - Total messages found: ${messages.length}');
+    debugPrint(
+      'getContextForAI - Current user: ${AuthService.currentUser?.id}',
+    );
+
     // Tomar solo los últimos N mensajes
     final List<MessageLocal> recentMessages = messages.length > maxMessages
         ? messages.sublist(messages.length - maxMessages)
         : messages;
+
+    debugPrint('getContextForAI - Recent messages: ${recentMessages.length}');
 
     final List<Map<String, dynamic>> formattedMessages = recentMessages
         .map(

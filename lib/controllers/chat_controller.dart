@@ -40,6 +40,7 @@ class ChatController extends GetxController {
   Future<void> initializeChat() async {
     try {
       isLoading.value = true;
+      debugPrint('Initializing new chat...');
 
       // Create a new conversation
       final ConversationLocal conversation =
@@ -48,12 +49,19 @@ class ChatController extends GetxController {
             model: 'gpt-4o-mini',
           );
 
+      debugPrint('Created new conversation: ${conversation.id}');
+
+      // Reset all state
       currentConversationId.value = conversation.id;
       conversationTitle.value = conversation.title ?? 'New Chat';
       hasMessages.value = false;
 
       // Clear any existing messages
       messages.clear();
+
+      debugPrint(
+        'Chat initialized - ID: ${conversation.id}, Messages: ${messages.length}',
+      );
     } catch (e) {
       debugPrint('Error initializing chat: $e');
       _showErrorSnackbar('Error initializing chat');
@@ -321,12 +329,33 @@ class ChatController extends GetxController {
 
   /// Start a new chat
   Future<void> startNewChat() async {
-    final NavigationController navController = Get.find<NavigationController>();
-    navController.hideChat();
+    try {
+      isLoading.value = true;
+      debugPrint('Starting new chat...');
 
-    // Wait a bit then show new chat
-    await Future.delayed(const Duration(milliseconds: 300));
-    navController.showChat();
+      final NavigationController navController =
+          Get.find<NavigationController>();
+
+      // Hide current chat view
+      navController.hideChat();
+      debugPrint('Hidden current chat view');
+
+      // Wait a bit for animation
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      // Initialize a completely new chat
+      await initializeChat();
+      debugPrint('Initialized new chat');
+
+      // Show the new chat view
+      navController.showChat();
+      debugPrint('Showed new chat view');
+    } catch (e) {
+      debugPrint('Error starting new chat: $e');
+      _showErrorSnackbar('Error starting new chat');
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   /// Load existing conversation
