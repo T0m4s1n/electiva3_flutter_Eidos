@@ -1,82 +1,114 @@
--- Create users table with additional profile information
-CREATE TABLE IF NOT EXISTS public.users (
-    id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
-    email TEXT UNIQUE NOT NULL,
-    full_name TEXT,
-    bio TEXT,
-    avatar_url TEXT,
-    notifications_enabled BOOLEAN DEFAULT true,
-    dark_mode_enabled BOOLEAN DEFAULT false,
-    language TEXT DEFAULT 'English',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+-- Extensiones útiles (opcional)
+create extension if not exists "uuid-ossp";
+
+-- ============ TABLAS ============
+
+create table public.conversations (
+  id uuid primary key,
+  user_id uuid references auth.users(id) on delete cascade,
+  title text,
+  model text,
+  summary text,
+  is_archived boolean default false,
+  last_message_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
--- Enable Row Level Security
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+create table public.messages (
+  id uuid primary key,
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  role text not null check (role in ('user','assistant','system','tool')),
+  content jsonb not null,                      -- JSON estructurado
+  created_at timestamptz not null,             -- tiempo cliente
+  seq int not null,                            -- ordinal local para ordenar
+  parent_id uuid null,                         -- para hilos/ediciones
+  status text not null default 'ok' check (status in ('ok','pending','error')),
+  is_deleted boolean not null default false
+);
 
--- Create policies for users table
-CREATE POLICY "Users can view own profile" ON public.users
-    FOR SELECT USING (auth.uid() = id);
+-- ============ ÍNDICES ============
+create index if not exists idx_conversations_user_updated
+  on public.conversations(user_id, updated_at desc);
 
-CREATE POLICY "Users can update own profile" ON public.users
-    FOR UPDATE USING (auth.uid() = id);
+create index if not exists idx_messages_conv_created
+  on public.messages(conversation_id, created_at, seq);
 
-CREATE POLICY "Users can insert own profile" ON public.users
-    FOR INSERT WITH CHECK (auth.uid() = id);
+-- ============ TRIGGERS ============
+create or replace function public.tg_touch_conversation()
+returns trigger language plpgsql as $$
+begin
+  update public.conversations
+    set updated_at = now(),
+        last_message_at = greatest(coalesce(new.created_at, now()), coalesce(last_message_at, '-infinity'))
+  where id = new.conversation_id;
+  return new;
+end $$;
 
--- Create function to handle new user registration
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-    INSERT INTO public.users (id, email, full_name)
-    VALUES (NEW.id, NEW.email, COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)));
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+drop trigger if exists tg_touch_conversation on public.messages;
+create trigger tg_touch_conversation
+after insert on public.messages
+for each row execute function public.tg_touch_conversation();
 
--- Create trigger for new user registration
-CREATE OR REPLACE TRIGGER on_auth_user_created
-    AFTER INSERT ON auth.users
-    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+-- ============ RLS ============
+alter table public.conversations enable row level security;
+alter table public.messages enable row level security;
 
--- Create function to update updated_at timestamp
-CREATE OR REPLACE FUNCTION public.update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+-- Conversations: solo dueño
+drop policy if exists "convs_select_own" on public.conversations;
+create policy "convs_select_own"
+on public.conversations for select
+using (auth.uid() = user_id);
 
--- Create trigger to automatically update updated_at
-CREATE OR REPLACE TRIGGER update_users_updated_at
-    BEFORE UPDATE ON public.users
-    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+drop policy if exists "convs_insert_own" on public.conversations;
+create policy "convs_insert_own"
+on public.conversations for insert
+with check (auth.uid() = user_id);
 
--- Create storage bucket for profile pictures
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('profile-pictures', 'profile-pictures', true)
-ON CONFLICT (id) DO NOTHING;
+drop policy if exists "convs_update_own" on public.conversations;
+create policy "convs_update_own"
+on public.conversations for update
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
 
--- Create storage policy for profile pictures
-CREATE POLICY "Users can upload their own profile pictures" ON storage.objects
-    FOR INSERT WITH CHECK (
-        bucket_id = 'profile-pictures' AND
-        auth.uid()::text = (storage.foldername(name))[1]
-    );
+drop policy if exists "convs_delete_own" on public.conversations;
+create policy "convs_delete_own"
+on public.conversations for delete
+using (auth.uid() = user_id);
 
-CREATE POLICY "Users can update their own profile pictures" ON storage.objects
-    FOR UPDATE USING (
-        bucket_id = 'profile-pictures' AND
-        auth.uid()::text = (storage.foldername(name))[1]
-    );
+-- Messages: solo de conversaciones del dueño
+drop policy if exists "msgs_select_own_convs" on public.messages;
+create policy "msgs_select_own_convs"
+on public.messages for select
+using (exists (
+  select 1 from public.conversations c
+  where c.id = messages.conversation_id and c.user_id = auth.uid()
+));
 
-CREATE POLICY "Users can delete their own profile pictures" ON storage.objects
-    FOR DELETE USING (
-        bucket_id = 'profile-pictures' AND
-        auth.uid()::text = (storage.foldername(name))[1]
-    );
+drop policy if exists "msgs_insert_own_convs" on public.messages;
+create policy "msgs_insert_own_convs"
+on public.messages for insert
+with check (exists (
+  select 1 from public.conversations c
+  where c.id = messages.conversation_id and c.user_id = auth.uid()
+));
 
-CREATE POLICY "Profile pictures are publicly viewable" ON storage.objects
-    FOR SELECT USING (bucket_id = 'profile-pictures');
+drop policy if exists "msgs_update_own_convs" on public.messages;
+create policy "msgs_update_own_convs"
+on public.messages for update
+using (exists (
+  select 1 from public.conversations c
+  where c.id = messages.conversation_id and c.user_id = auth.uid()
+))
+with check (exists (
+  select 1 from public.conversations c
+  where c.id = messages.conversation_id and c.user_id = auth.uid()
+));
+
+drop policy if exists "msgs_delete_own_convs" on public.messages;
+create policy "msgs_delete_own_convs"
+on public.messages for delete
+using (exists (
+  select 1 from public.conversations c
+  where c.id = messages.conversation_id and c.user_id = auth.uid()
+));

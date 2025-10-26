@@ -1,9 +1,11 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'sync_service.dart';
 
 class AuthService {
   static final SupabaseClient _supabase = Supabase.instance.client;
+  static final SyncService _syncService = SyncService(_supabase);
 
   // Get current user
   static User? get currentUser => _supabase.auth.currentUser;
@@ -40,6 +42,12 @@ class AuthService {
         email: email,
         password: password,
       );
+
+      // Si el login es exitoso, sincronizar datos locales
+      if (response.user != null) {
+        await _syncService.onLogin(response.user!.id);
+      }
+
       return response;
     } catch (e) {
       rethrow;
@@ -61,6 +69,10 @@ class AuthService {
   // Sign out
   static Future<void> signOut() async {
     try {
+      // Primero sincronizar y limpiar datos locales
+      await _syncService.onLogout();
+
+      // Luego cerrar sesión en Supabase
       await _supabase.auth.signOut();
     } catch (e) {
       rethrow;
@@ -196,6 +208,15 @@ class AuthService {
   // Listen to auth state changes
   static Stream<AuthState> get authStateChanges =>
       _supabase.auth.onAuthStateChange;
+
+  // Sincronización manual de datos pendientes
+  static Future<void> syncPendingData() async {
+    if (!isLoggedIn) return;
+    await _syncService.syncPending();
+  }
+
+  // Obtener el servicio de sincronización para uso avanzado
+  static SyncService get syncService => _syncService;
 }
 
 class UserProfile {
