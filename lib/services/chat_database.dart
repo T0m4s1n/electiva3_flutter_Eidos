@@ -87,11 +87,38 @@ class ChatDatabase {
 
   static Future<void> upsertConversation(Map<String, Object?> conv) async {
     final Database db = await instance;
-    await db.insert(
-      'conversations',
-      conv,
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+
+    // Verificar si la conversación existe
+    final String? id = conv['id'] as String?;
+    if (id != null) {
+      final List<Map<String, Object?>> existing = await db.query(
+        'conversations',
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+
+      if (existing.isNotEmpty) {
+        // Si existe, hacer UPDATE solo de los campos proporcionados
+        final Map<String, Object?> updateData = Map.from(conv);
+        updateData.remove('id'); // No actualizar el ID
+
+        if (updateData.isNotEmpty) {
+          await db.update(
+            'conversations',
+            updateData,
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+        }
+      } else {
+        // Si no existe, hacer INSERT completo
+        await db.insert('conversations', conv);
+      }
+    } else {
+      // Si no hay ID, hacer INSERT normal
+      await db.insert('conversations', conv);
+    }
   }
 
   static Future<void> upsertMessage(Map<String, Object?> msg) async {
@@ -202,6 +229,15 @@ class ChatDatabase {
       {'is_deleted': 1},
       where: 'id = ?',
       whereArgs: [messageId],
+    );
+  }
+
+  static Future<void> deleteSystemErrorMessages(String conversationId) async {
+    final Database db = await instance;
+    await db.delete(
+      'messages',
+      where: 'conversation_id = ? AND role = ? AND content LIKE ?',
+      whereArgs: [conversationId, 'system', '%Sorry, I encountered an error%'],
     );
   }
 

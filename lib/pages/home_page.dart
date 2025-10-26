@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:lottie/lottie.dart';
 import '../controllers/auth_controller.dart';
 import '../controllers/navigation_controller.dart';
 import '../controllers/app_controller.dart';
 import '../widgets/animated_header.dart';
-import '../widgets/chat_button.dart';
 import '../widgets/loading_screen.dart';
+import '../widgets/conversations_list.dart';
 import 'auth_page.dart';
 import 'edit_profile_page.dart';
 import 'chat_page.dart';
@@ -88,47 +87,7 @@ class HomePage extends StatelessWidget {
                   } else if (navController.showChatView.value) {
                     return const ChatPage();
                   } else {
-                    return Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 16),
-                      child: SingleChildScrollView(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: <Widget>[
-                            const SizedBox(height: 20),
-                            // Lottie animation
-                            SizedBox(
-                              width: 200,
-                              height: 200,
-                              child: Lottie.asset(
-                                'assets/fonts/svgs/svgsquare.json',
-                                fit: BoxFit.contain,
-                                repeat: true,
-                              ),
-                            ),
-                            const SizedBox(height: 30),
-                            const Text(
-                              'Start a chat to start working on new projects and documents',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 18,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.black87,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 30),
-                            // Chat button
-                            ChatButton(
-                              text: 'Start New Chat',
-                              icon: Icons.chat_bubble_outline,
-                              isPrimary: true,
-                              onTap: () => navController.showChat(),
-                            ),
-                            const SizedBox(height: 20),
-                          ],
-                        ),
-                      ),
-                    );
+                    return const ConversationsList();
                   }
                 }),
               ),

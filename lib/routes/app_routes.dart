@@ -21,7 +21,7 @@ class AppRoutes {
       page: () => const EditProfilePage(),
       binding: AuthBinding(),
     ),
-    GetPage(name: chat, page: () => const ChatPage()),
+    GetPage(name: chat, page: () => const ChatPage(), binding: ChatBinding()),
     GetPage(name: loading, page: () => const LoadingPage()),
   ];
 }

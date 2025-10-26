@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:uuid/uuid.dart';
 
 // ======= Helpers de mapeo =======
 
@@ -230,25 +231,34 @@ class MessageLocal {
 // ======= Utilidades para generación de IDs =======
 
 class IdGenerator {
+  static const Uuid _uuid = Uuid();
+
   static String generateConversationId() {
-    // Usar UUID v4 para IDs únicos
-    return _generateUuid();
+    try {
+      // Usar UUID v4 para IDs únicos
+      return _uuid.v4();
+    } catch (e) {
+      // Fallback a método simple si hay error
+      return _generateSimpleId();
+    }
   }
 
   static String generateMessageId() {
-    // Usar UUID v4 para IDs únicos
-    return _generateUuid();
+    try {
+      // Usar UUID v4 para IDs únicos
+      return _uuid.v4();
+    } catch (e) {
+      // Fallback a método simple si hay error
+      return _generateSimpleId();
+    }
   }
 
-  static String _generateUuid() {
-    // Implementación simple de UUID v4
-    // En producción, usaría el paquete uuid
+  static String _generateSimpleId() {
+    // Método simple de respaldo
     final DateTime now = DateTime.now();
-    final String timestamp = now.millisecondsSinceEpoch.toRadixString(16);
-    final String random = (now.microsecond * 1000)
-        .toRadixString(16)
-        .padLeft(8, '0');
-    return '${timestamp.substring(0, 8)}-${timestamp.substring(8, 12)}-4${timestamp.substring(12, 15)}-${random.substring(0, 4)}-${random.substring(4)}';
+    final String timestamp = now.millisecondsSinceEpoch.toString();
+    final String random = now.microsecond.toString().padLeft(6, '0');
+    return '${timestamp}_${random}';
   }
 }
 
@@ -256,13 +266,14 @@ class IdGenerator {
 
 class ConversationFactory {
   static ConversationLocal createNew({
+    String? id,
     String? title,
     String? model,
     String? userId,
   }) {
     final String now = DateTime.now().toUtc().toIso8601String();
     return ConversationLocal(
-      id: IdGenerator.generateConversationId(),
+      id: id ?? IdGenerator.generateConversationId(),
       userId: userId,
       title: title ?? 'Nueva conversación',
       model: model ?? 'gpt-4o-mini',

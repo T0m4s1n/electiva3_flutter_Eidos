@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:sqflite/sqflite.dart';
+import 'package:flutter/foundation.dart';
 import '../services/chat_database.dart';
 import '../services/sync_service.dart';
 import '../services/auth_service.dart';
@@ -53,11 +54,7 @@ class ChatService {
 
     // Actualizar last_message_at de la conversación
     final String now = DateTime.now().toUtc().toIso8601String();
-    await ChatDatabase.upsertConversation({
-      'id': conversationId,
-      'last_message_at': now,
-      'updated_at': now,
-    });
+    await _updateConversationTimestamp(conversationId, now);
 
     // Si el usuario está logueado, sincronizar
     final String? userId = AuthService.currentUser?.id;
@@ -107,6 +104,8 @@ class ChatService {
     String title,
   ) async {
     final String now = DateTime.now().toUtc().toIso8601String();
+
+    // Ahora upsertConversation maneja esto correctamente
     await ChatDatabase.upsertConversation({
       'id': conversationId,
       'title': title,
@@ -298,6 +297,24 @@ class ChatService {
         ? messages.sublist(messages.length - maxMessages)
         : messages;
 
+    final List<Map<String, dynamic>> formattedMessages = recentMessages
+        .map(
+          (MessageLocal msg) => {
+            'id': msg.id,
+            'role': msg.role,
+            'content': msg.content,
+            'created_at': msg.createdAt,
+            'seq': msg.seq,
+          },
+        )
+        .toList();
+
+    debugPrint('Context for AI - Messages count: ${formattedMessages.length}');
+    for (int i = 0; i < formattedMessages.length; i++) {
+      final msg = formattedMessages[i];
+      debugPrint('Message $i: role=${msg['role']}, content=${msg['content']}');
+    }
+
     return {
       'conversation': {
         'id': conversation.id,
@@ -305,18 +322,30 @@ class ChatService {
         'model': conversation.model,
         'summary': conversation.summary,
       },
-      'messages': recentMessages
-          .map(
-            (MessageLocal msg) => {
-              'id': msg.id,
-              'role': msg.role,
-              'content': msg.content,
-              'created_at': msg.createdAt,
-              'seq': msg.seq,
-            },
-          )
-          .toList(),
+      'messages': formattedMessages,
       'total_messages': messages.length,
     };
+  }
+
+  /// Actualizar timestamp de conversación de manera segura
+  static Future<void> _updateConversationTimestamp(
+    String conversationId,
+    String timestamp,
+  ) async {
+    // Ahora upsertConversation maneja esto correctamente
+    await ChatDatabase.upsertConversation({
+      'id': conversationId,
+      'last_message_at': timestamp,
+      'updated_at': timestamp,
+    });
+  }
+
+  /// Limpiar mensajes de error del sistema de una conversación
+  static Future<void> clearSystemErrorMessages(String conversationId) async {
+    try {
+      await ChatDatabase.deleteSystemErrorMessages(conversationId);
+    } catch (e) {
+      debugPrint('Error clearing system error messages: $e');
+    }
   }
 }
