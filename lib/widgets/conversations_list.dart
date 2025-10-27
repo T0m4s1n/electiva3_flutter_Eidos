@@ -13,16 +13,29 @@ class ConversationsList extends StatefulWidget {
   State<ConversationsList> createState() => _ConversationsListState();
 }
 
-class _ConversationsListState extends State<ConversationsList> {
+class _ConversationsListState extends State<ConversationsList>
+    with SingleTickerProviderStateMixin {
   final ChatController chatController = Get.find<ChatController>();
   final NavigationController navController = Get.find<NavigationController>();
   final RxList<ConversationLocal> conversations = <ConversationLocal>[].obs;
   final RxBool isLoading = false.obs;
+  final Set<String> _deletingIds = <String>{};
+  late AnimationController _animationController;
 
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
     _loadConversations();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadConversations() async {
@@ -61,15 +74,55 @@ class _ConversationsListState extends State<ConversationsList> {
 
   Future<void> _deleteConversation(String conversationId) async {
     try {
+      debugPrint('Deleting conversation: $conversationId');
+      
+      // Check if this is the currently active conversation
+      final bool isCurrentConversation = 
+          chatController.currentConversationId.value == conversationId;
+      
+      // Add to deleting set and trigger animation
+      setState(() {
+        _deletingIds.add(conversationId);
+      });
+      
+      // Wait for animation to complete
+      await Future.delayed(const Duration(milliseconds: 300));
+      
+      // Delete from database
       await ChatService.deleteConversation(conversationId);
+      debugPrint('Conversation deleted from database');
+      
+      // Remove from deleting set
+      setState(() {
+        _deletingIds.remove(conversationId);
+      });
+      
+      // Reload the conversations list
       await _loadConversations();
-
-      // If this was the current conversation, start a new one
-      if (chatController.currentConversationId.value == conversationId) {
-        await _startNewChat();
+      
+      // If this was the current conversation, clear the controller state and hide chat
+      if (isCurrentConversation) {
+        chatController.messages.clear();
+        chatController.currentConversationId.value = '';
+        chatController.conversationTitle.value = 'New Chat';
+        chatController.hasMessages.value = false;
+        navController.hideChat();
+        debugPrint('Cleared current conversation state');
       }
     } catch (e) {
       debugPrint('Error deleting conversation: $e');
+      // Remove from deleting set on error
+      setState(() {
+        _deletingIds.remove(conversationId);
+      });
+      // Show error to user
+      Get.snackbar(
+        'Error',
+        'Failed to delete conversation',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red[100],
+        colorText: Colors.red[800],
+      );
     }
   }
 
@@ -154,83 +207,115 @@ class _ConversationsListState extends State<ConversationsList> {
   }
 
   Widget _buildConversationCard(ConversationLocal conversation) {
+    final bool isDeleting = _deletingIds.contains(conversation.id);
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black87),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+      child: Dismissible(
+        key: Key(conversation.id),
+        direction: DismissDirection.endToStart,
+        background: Container(
+          decoration: BoxDecoration(
+            color: Colors.red,
+            borderRadius: BorderRadius.circular(12),
           ),
-        ],
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        title: Text(
-          conversation.title ?? 'Untitled Chat',
-          style: const TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.only(right: 20),
+          child: const Icon(
+            Icons.delete,
+            color: Colors.white,
+            size: 30,
           ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
         ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (conversation.summary != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                conversation.summary!,
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 14,
-                  color: Colors.grey[600],
+        onDismissed: (direction) {
+          _deleteConversation(conversation.id);
+        },
+        child: AnimatedOpacity(
+          opacity: isDeleting ? 0.0 : 1.0,
+          duration: const Duration(milliseconds: 300),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            transform: isDeleting
+                ? Matrix4.translationValues(-MediaQuery.of(context).size.width, 0, 0)
+                : null,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.black87),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
                 ),
-                maxLines: 2,
+              ],
+            ),
+            child: ListTile(
+              contentPadding: const EdgeInsets.all(16),
+              title: Text(
+                conversation.title ?? 'Untitled Chat',
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-            ],
-            const SizedBox(height: 8),
-            Text(
-              _formatDate(conversation.lastMessageAt ?? conversation.updatedAt),
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 12,
-                color: Colors.grey[500],
-              ),
-            ),
-          ],
-        ),
-        trailing: PopupMenuButton<String>(
-          onSelected: (value) {
-            switch (value) {
-              case 'delete':
-                _deleteConversation(conversation.id);
-                break;
-            }
-          },
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'delete',
-              child: Row(
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.delete, color: Colors.red),
-                  SizedBox(width: 8),
-                  Text('Delete'),
+                  if (conversation.summary != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      conversation.summary!,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Text(
+                    _formatDate(conversation.lastMessageAt ?? conversation.updatedAt),
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 12,
+                      color: Colors.grey[500],
+                    ),
+                  ),
                 ],
               ),
+              trailing: PopupMenuButton<String>(
+                onSelected: (value) {
+                  switch (value) {
+                    case 'delete':
+                      _deleteConversation(conversation.id);
+                      break;
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text('Delete'),
+                      ],
+                    ),
+                  ),
+                ],
+                child: const Icon(Icons.more_vert, color: Colors.black87),
+              ),
+              onTap: () => _openConversation(conversation.id),
             ),
-          ],
-          child: const Icon(Icons.more_vert, color: Colors.black87),
+          ),
         ),
-        onTap: () => _openConversation(conversation.id),
       ),
     );
   }

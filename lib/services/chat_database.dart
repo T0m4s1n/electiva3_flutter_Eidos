@@ -5,6 +5,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 class ChatDatabase {
+  // Local storage enabled for chat functionality
+  static const bool _enabled = true;
+  
   static const String _dbName = 'chat_app.db';
   static const int _dbVersion = 1;
 
@@ -57,6 +60,9 @@ class ChatDatabase {
   ''';
 
   static Future<Database> get instance async {
+    if (!_enabled) {
+      throw Exception('Local database is currently disabled.');
+    }
     if (_db != null) return _db!;
     _db = await _open();
     return _db!;
@@ -86,6 +92,7 @@ class ChatDatabase {
   // ======= CRUD mínimos =======
 
   static Future<void> upsertConversation(Map<String, Object?> conv) async {
+    if (!_enabled) return; // Disabled
     final Database db = await instance;
 
     // Verificar si la conversación existe
@@ -122,6 +129,7 @@ class ChatDatabase {
   }
 
   static Future<void> upsertMessage(Map<String, Object?> msg) async {
+    if (!_enabled) return; // Disabled
     final Database db = await instance;
     await db.insert(
       'messages',
@@ -131,6 +139,7 @@ class ChatDatabase {
   }
 
   static Future<List<Map<String, Object?>>> getPendingMessages() async {
+    if (!_enabled) return [];
     final Database db = await instance;
     return db.query('messages', where: 'status = ?', whereArgs: ['pending']);
   }
@@ -138,6 +147,7 @@ class ChatDatabase {
   static Future<List<Map<String, Object?>>> getConversationsByUser(
     String? userId,
   ) async {
+    if (!_enabled) return [];
     final Database db = await instance;
     if (userId == null) {
       return db.query('conversations', where: 'user_id IS NULL');
@@ -146,6 +156,7 @@ class ChatDatabase {
   }
 
   static Future<void> markMessagesSynced(List<String> ids) async {
+    if (!_enabled) return;
     if (ids.isEmpty) return;
     final Database db = await instance;
     final Batch batch = db.batch();
@@ -162,6 +173,7 @@ class ChatDatabase {
 
   // ======= Logout estricto (BORRAR todo lo local) =======
   static Future<void> purgeAllLocal() async {
+    if (!_enabled) return; // Already disabled
     final Database db = await instance;
     final Batch batch = db.batch();
     batch.delete('messages');
@@ -174,6 +186,7 @@ class ChatDatabase {
   static Future<List<Map<String, Object?>>> getMessagesByConversation(
     String conversationId,
   ) async {
+    if (!_enabled) return [];
     final Database db = await instance;
     return db.query(
       'messages',
@@ -186,6 +199,7 @@ class ChatDatabase {
   static Future<Map<String, Object?>?> getConversationById(
     String conversationId,
   ) async {
+    if (!_enabled) return null;
     final Database db = await instance;
     final List<Map<String, Object?>> results = await db.query(
       'conversations',
@@ -197,6 +211,7 @@ class ChatDatabase {
   }
 
   static Future<int> getNextSequenceNumber(String conversationId) async {
+    if (!_enabled) return 1; // Return default sequence
     final Database db = await instance;
     final List<Map<String, Object?>> results = await db.rawQuery(
       'SELECT MAX(seq) as max_seq FROM messages WHERE conversation_id = ?',
@@ -210,6 +225,7 @@ class ChatDatabase {
     String conversationId,
     String summary,
   ) async {
+    if (!_enabled) return;
     final Database db = await instance;
     await db.update(
       'conversations',
@@ -223,6 +239,7 @@ class ChatDatabase {
   }
 
   static Future<void> markMessageAsDeleted(String messageId) async {
+    if (!_enabled) return;
     final Database db = await instance;
     await db.update(
       'messages',
@@ -233,6 +250,7 @@ class ChatDatabase {
   }
 
   static Future<void> deleteSystemErrorMessages(String conversationId) async {
+    if (!_enabled) return;
     final Database db = await instance;
     await db.delete(
       'messages',

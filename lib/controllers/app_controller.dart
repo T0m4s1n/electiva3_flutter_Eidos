@@ -15,8 +15,8 @@ class AppController extends GetxController {
   }
 
   void _initializeApp() {
-    // Simulate initial loading
-    Future.delayed(const Duration(milliseconds: 500), () {
+    // Minimize initial loading for emulator performance
+    Future.delayed(const Duration(milliseconds: 100), () {
       isInitialLoading.value = false;
     });
   }

@@ -90,15 +90,21 @@ class ChatController extends GetxController {
       messages.add(userMessage);
       hasMessages.value = true;
 
-      // Update conversation title if it's the first message
+      // Update conversation title and generate context if it's the first message
       if (messages.length == 1) {
         await _updateConversationTitle(messageText);
+        
+        // Generate and save context for personalized AI responses
+        await _generateAndSaveContext(messageText);
       }
 
       // Scroll to bottom
       _scrollToBottom();
 
-      // Get AI response
+      // Wait a bit longer to ensure the message is fully saved and indexed in the database
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      // Get AI response - pass the message text explicitly to ensure it's used
       await _getAIResponse(messageText);
     } catch (e) {
       debugPrint('Error sending message: $e');
@@ -122,18 +128,68 @@ class ChatController extends GetxController {
       await ChatService.clearSystemErrorMessages(currentConversationId.value);
 
       // Get conversation context
-      final Map<String, dynamic> context = await ChatService.getContextForAI(
-        conversationId: currentConversationId.value,
-        maxMessages:
-            10, // Reducir a 10 mensajes para evitar problemas de tokens
-      );
+      Map<String, dynamic> context;
+      try {
+        context = await ChatService.getContextForAI(
+          conversationId: currentConversationId.value,
+          maxMessages: 10,
+        );
+        
+        debugPrint('Context retrieved successfully with ${context['messages'].length} messages');
+        
+        // Check if the user's current message is in the context
+        final bool hasUserMessage = context['messages'].any(
+          (msg) => msg['role'] == 'user' && 
+                   _extractTextFromContent(msg['content']) == userMessage
+        );
+        
+        if (!hasUserMessage) {
+          debugPrint('User message not found in context, adding it manually');
+          // Add the user message if it's not in the context yet
+          context['messages'].add({
+            'id': 'temp',
+            'role': 'user',
+            'content': {'text': userMessage},
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+            'seq': 999999,
+          });
+        }
+      } catch (e) {
+        debugPrint('Error getting context, using fallback: $e');
+        // Fallback: create a minimal context with just the current user message
+        context = {
+          'conversation': {'id': currentConversationId.value},
+          'messages': [
+            {
+              'id': 'temp',
+              'role': 'user',
+              'content': {'text': userMessage},
+              'created_at': DateTime.now().toUtc().toIso8601String(),
+              'seq': 0,
+            }
+          ],
+        };
+      }
+
+      // Get the conversation context for personalized system message
+      String systemMessageContent = 'You are a helpful AI assistant. Respond in a friendly and helpful manner.';
+      try {
+        final ConversationLocal? conversation = await ChatService.getConversation(
+          currentConversationId.value,
+        );
+        if (conversation?.summary != null && conversation!.summary!.isNotEmpty) {
+          systemMessageContent = _getSystemMessage(conversation.summary!);
+          debugPrint('Using personalized system message for context: ${conversation.summary}');
+        }
+      } catch (e) {
+        debugPrint('Error getting conversation context: $e');
+      }
 
       // Prepare messages for OpenAI API
       final List<Map<String, String>> openaiMessages = [
         {
           'role': 'system',
-          'content':
-              'You are a helpful AI assistant. Respond in a friendly and helpful manner.',
+          'content': systemMessageContent,
         },
         ...context['messages']
             .where(
@@ -142,12 +198,45 @@ class ChatController extends GetxController {
                   'system', // Filtrar mensajes de error del sistema
             )
             .map<Map<String, String>>(
-              (Map<String, dynamic> msg) => {
-                'role': msg['role'] as String,
-                'content': _cleanMessageContent(
-                  msg['content']['text'] as String? ??
-                      msg['content'].toString(),
-                ),
+              (Map<String, dynamic> msg) {
+                // Extract text content properly
+                String textContent = '';
+                try {
+                  final dynamic contentRaw = msg['content'];
+                  
+                  if (contentRaw == null) {
+                    debugPrint('Warning: Content is null for message: ${msg['id']}');
+                    textContent = '';
+                  } else if (contentRaw is Map) {
+                    final Map<String, dynamic> content = contentRaw as Map<String, dynamic>;
+                    textContent = content['text'] as String? ?? '';
+                    
+                    // If text is empty, try to get any string value from the map
+                    if (textContent.isEmpty && content.isNotEmpty) {
+                      final firstValue = content.values.first;
+                      textContent = firstValue is String ? firstValue : firstValue.toString();
+                    }
+                  } else if (contentRaw is String) {
+                    textContent = contentRaw;
+                  } else {
+                    textContent = contentRaw.toString();
+                  }
+                } catch (e, stackTrace) {
+                  debugPrint('Error extracting message content: $e');
+                  debugPrint('Stack trace: $stackTrace');
+                  debugPrint('Message data: $msg');
+                  textContent = '';
+                }
+                
+                // Validate that we have valid content
+                if (textContent.isEmpty) {
+                  debugPrint('Warning: Empty message content for message: ${msg['id']}');
+                }
+                
+                return {
+                  'role': msg['role'] as String,
+                  'content': _cleanMessageContent(textContent),
+                };
               },
             )
             .toList(),
@@ -166,6 +255,18 @@ class ChatController extends GetxController {
       debugPrint(
         'Sending ${validMessages.length} valid messages to OpenAI (${openaiMessages.length} total)',
       );
+      
+      // Ensure we have at least a system message and one user message
+      if (validMessages.length < 2) {
+        debugPrint('Warning: Only ${validMessages.length} valid messages. Adding user message manually.');
+        // If we don't have enough messages, add the user message directly
+        validMessages.add({
+          'role': 'user',
+          'content': _cleanMessageContent(userMessage),
+        });
+        debugPrint('Added user message directly. Total messages: ${validMessages.length}');
+      }
+      
       for (int i = 0; i < validMessages.length; i++) {
         final msg = validMessages[i];
         final content = msg['content'] ?? '';
@@ -176,7 +277,14 @@ class ChatController extends GetxController {
       }
 
       // Call OpenAI API
+      debugPrint('Calling OpenAI API with ${validMessages.length} messages');
       final String aiResponse = await _callOpenAIAPI(validMessages);
+      debugPrint('Received AI response: ${aiResponse.substring(0, aiResponse.length > 100 ? 100 : aiResponse.length)}...');
+
+      // Validate the response
+      if (aiResponse.isEmpty || aiResponse.trim().isEmpty || aiResponse == '0') {
+        throw Exception('Invalid or empty response from AI');
+      }
 
       // Add AI response to chat
       final MessageLocal aiMessage = await ChatService.createAssistantMessage(
@@ -185,6 +293,7 @@ class ChatController extends GetxController {
       );
 
       messages.add(aiMessage);
+      debugPrint('AI message added to chat with ID: ${aiMessage.id}');
 
       // Scroll to bottom
       _scrollToBottom();
@@ -253,12 +362,30 @@ class ChatController extends GetxController {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(responseBody);
-        return responseData['choices'][0]['message']['content'] as String;
+        
+        // Validate the response structure
+        if (responseData['choices'] == null || 
+            responseData['choices'].isEmpty) {
+          throw Exception('No choices in OpenAI response');
+        }
+        
+        final Map<String, dynamic> firstChoice = responseData['choices'][0];
+        final Map<String, dynamic> message = firstChoice['message'];
+        final String? content = message['content'] as String?;
+        
+        if (content == null || content.isEmpty || content.trim() == '0') {
+          throw Exception('Empty or invalid response from OpenAI');
+        }
+        
+        return content;
       } else {
         throw Exception(
           'OpenAI API error: ${response.statusCode} - $responseBody',
         );
       }
+    } catch (e) {
+      debugPrint('Error parsing OpenAI response: $e');
+      rethrow;
     } finally {
       httpClient.close();
     }
@@ -280,6 +407,84 @@ class ChatController extends GetxController {
       conversationTitle.value = title;
     } catch (e) {
       debugPrint('Error updating conversation title: $e');
+    }
+  }
+
+  /// Generate context from user's message to personalize the AI response
+  Future<void> _generateAndSaveContext(String userMessage) async {
+    try {
+      // Extract keywords and intent from the user's message
+      final String context = _extractContext(userMessage);
+      
+      // Save the context as a system message or conversation summary
+      await ChatService.updateConversationSummary(
+        currentConversationId.value,
+        context,
+      );
+      
+      debugPrint('Generated context: $context');
+    } catch (e) {
+      debugPrint('Error generating context: $e');
+    }
+  }
+
+  /// Extract context/intent from user message
+  String _extractContext(String message) {
+    final String lowerMessage = message.toLowerCase();
+    
+    // Detect common intents and topics
+    if (lowerMessage.contains('codigo') || 
+        lowerMessage.contains('code') ||
+        lowerMessage.contains('programar') ||
+        lowerMessage.contains('programming')) {
+      return 'programming_assistant';
+    } else if (lowerMessage.contains('explica') ||
+               lowerMessage.contains('explain') ||
+               lowerMessage.contains('que es') ||
+               lowerMessage.contains('what is')) {
+      return 'educational_explanation';
+    } else if (lowerMessage.contains('ayuda') ||
+               lowerMessage.contains('help') ||
+               lowerMessage.contains('como puedo') ||
+               lowerMessage.contains('how can i')) {
+      return 'support_assistant';
+    } else if (lowerMessage.contains('creative') ||
+               lowerMessage.contains('creativo') ||
+               lowerMessage.contains('idea') ||
+               lowerMessage.contains('idear')) {
+      return 'creative_brainstorming';
+    } else if (lowerMessage.contains('traducir') ||
+               lowerMessage.contains('translate') ||
+               lowerMessage.contains('idioma') ||
+               lowerMessage.contains('language')) {
+      return 'translation_assistant';
+    } else if (lowerMessage.contains('escribir') ||
+               lowerMessage.contains('write') ||
+               lowerMessage.contains('redactar') ||
+               lowerMessage.contains('composicion')) {
+      return 'writing_assistant';
+    } else {
+      return 'general_assistant';
+    }
+  }
+
+  /// Get personalized system message based on context
+  String _getSystemMessage(String context) {
+    switch (context) {
+      case 'programming_assistant':
+        return 'You are a helpful programming assistant. You help users with code, debugging, and technical questions. Provide clear, well-documented solutions.';
+      case 'educational_explanation':
+        return 'You are an educational assistant. You explain concepts clearly and help users learn. Provide detailed, easy-to-understand explanations.';
+      case 'support_assistant':
+        return 'You are a helpful support assistant. You provide assistance and guidance to help users solve problems and achieve their goals.';
+      case 'creative_brainstorming':
+        return 'You are a creative brainstorming assistant. You help generate creative ideas, solutions, and innovative approaches to problems.';
+      case 'translation_assistant':
+        return 'You are a translation and language assistant. You help with translations and language-related questions.';
+      case 'writing_assistant':
+        return 'You are a writing assistant. You help with writing, editing, and improving text content.';
+      default:
+        return 'You are a helpful AI assistant. Respond in a friendly and helpful manner, tailoring your responses to the user\'s needs.';
     }
   }
 
@@ -409,5 +614,23 @@ class ChatController extends GetxController {
         ) // Control characters
         .replaceAll(RegExp(r'\s+'), ' ') // Multiple spaces to single space
         .trim();
+  }
+
+  /// Extract text from content (handles different content formats)
+  String _extractTextFromContent(dynamic content) {
+    try {
+      if (content == null) return '';
+      
+      if (content is Map<String, dynamic>) {
+        return content['text'] as String? ?? '';
+      } else if (content is String) {
+        return content;
+      } else {
+        return content.toString();
+      }
+    } catch (e) {
+      debugPrint('Error extracting text from content: $e');
+      return '';
+    }
   }
 }

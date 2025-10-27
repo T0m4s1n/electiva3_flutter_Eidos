@@ -100,6 +100,16 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
     }
   }
 
+  void _closeMenu() {
+    if (_isMenuOpen) {
+      setState(() {
+        _isMenuOpen = false;
+      });
+      _menuController.reverse();
+      _slideController.reverse();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -312,6 +322,23 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                   ),
                                   const SizedBox(height: 16),
 
+                                  // Create new chat button
+                                  _buildSkeletonButton(
+                                    icon: Icons.add_circle_outline,
+                                    text: 'Create New Chat',
+                                    onTap: () {
+                                      // Close menu first
+                                      _closeMenu();
+                                      // Call create chat after a small delay to let menu close
+                                      Future.delayed(const Duration(milliseconds: 150), () {
+                                        widget.onCreateChat?.call();
+                                      });
+                                    },
+                                    isPrimary: true,
+                                  ),
+
+                                  const SizedBox(height: 12),
+
                                   if (widget.isLoggedIn) ...[
                                     // User info
                                     Container(
@@ -357,8 +384,10 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                       icon: Icons.edit_outlined,
                                       text: 'Edit Profile',
                                       onTap: () {
-                                        widget.onEditProfile?.call();
-                                        _toggleMenu();
+                                        _closeMenu();
+                                        Future.delayed(const Duration(milliseconds: 150), () {
+                                          widget.onEditProfile?.call();
+                                        });
                                       },
                                     ),
 
@@ -369,34 +398,13 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                       icon: Icons.logout,
                                       text: 'Log Out',
                                       onTap: () {
-                                        widget.onLogout?.call();
-                                        _toggleMenu();
-                                      },
-                                    ),
-                                  ] else ...[
-                                    // Login button
-                                    _buildSkeletonButton(
-                                      icon: Icons.login,
-                                      text: 'Log In',
-                                      onTap: () {
-                                        widget.onLogin?.call();
-                                        _toggleMenu();
+                                        _closeMenu();
+                                        Future.delayed(const Duration(milliseconds: 150), () {
+                                          widget.onLogout?.call();
+                                        });
                                       },
                                     ),
                                   ],
-
-                                  const SizedBox(height: 12),
-
-                                  // Create new chat button
-                                  _buildSkeletonButton(
-                                    icon: Icons.add_circle_outline,
-                                    text: 'Create New Chat',
-                                    onTap: () {
-                                      widget.onCreateChat?.call();
-                                      _toggleMenu(); // Close the menu when creating a new chat
-                                    },
-                                    isPrimary: true,
-                                  ),
                                 ],
                               ),
 

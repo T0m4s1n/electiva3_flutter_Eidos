@@ -1,7 +1,9 @@
 import 'package:get/get.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import '../services/chat_database.dart';
 
 class AuthController extends GetxController {
   static final SupabaseClient _supabase = Supabase.instance.client;
@@ -14,12 +16,41 @@ class AuthController extends GetxController {
   final RxString userName = ''.obs;
   final RxString userEmail = ''.obs;
   final RxString userAvatarUrl = ''.obs;
+  final RxBool hasSeenOnboarding = false.obs;
 
   @override
   void onInit() {
     super.onInit();
+    // Don't block initialization - make async calls non-blocking
+    _checkOnboardingStatus();
     _initializeAuth();
     _listenToAuthChanges();
+  }
+
+  Future<void> _checkOnboardingStatus() async {
+    try {
+      // Use getInstance without waiting to avoid blocking
+      SharedPreferences.getInstance().then((prefs) {
+        hasSeenOnboarding.value =
+            prefs.getBool('has_seen_onboarding') ?? false;
+      }).catchError((e) {
+        debugPrint('Error checking onboarding status: $e');
+        hasSeenOnboarding.value = false;
+      });
+    } catch (e) {
+      debugPrint('Error checking onboarding status: $e');
+      hasSeenOnboarding.value = false;
+    }
+  }
+
+  Future<void> completeOnboarding() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('has_seen_onboarding', true);
+      hasSeenOnboarding.value = true;
+    } catch (e) {
+      debugPrint('Error completing onboarding: $e');
+    }
   }
 
   void _initializeAuth() {
@@ -149,6 +180,10 @@ class AuthController extends GetxController {
   Future<void> signOut() async {
     try {
       isLoading.value = true;
+      
+      // Wipe all local data when user logs out
+      await ChatDatabase.purgeAllLocal();
+      
       await _supabase.auth.signOut();
     } catch (e) {
       rethrow;

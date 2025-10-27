@@ -171,25 +171,44 @@ class ChatService {
 
   /// Eliminar una conversación y todos sus mensajes
   static Future<void> deleteConversation(String conversationId) async {
-    final Database db = await ChatDatabase.instance;
-    final Batch batch = db.batch();
+    debugPrint('Deleting conversation: $conversationId');
+    
+    try {
+      final Database db = await ChatDatabase.instance;
+      
+      // Delete messages first (ON DELETE CASCADE should handle this, but doing it explicitly)
+      final int messagesDeleted = await db.delete(
+        'messages',
+        where: 'conversation_id = ?',
+        whereArgs: [conversationId],
+      );
+      debugPrint('Deleted $messagesDeleted messages for conversation $conversationId');
+      
+      // Delete conversation
+      final int conversationsDeleted = await db.delete(
+        'conversations',
+        where: 'id = ?',
+        whereArgs: [conversationId],
+      );
+      debugPrint('Deleted $conversationsDeleted conversations with id $conversationId');
+      
+      if (conversationsDeleted == 0) {
+        debugPrint('Warning: No conversation was deleted - conversation may not exist');
+        throw Exception('Conversation not found or already deleted');
+      }
+      
+      if (conversationsDeleted > 0) {
+        debugPrint('Successfully deleted conversation $conversationId');
+      }
 
-    // Eliminar mensajes primero (por las foreign keys)
-    batch.delete(
-      'messages',
-      where: 'conversation_id = ?',
-      whereArgs: [conversationId],
-    );
-
-    // Eliminar conversación
-    batch.delete('conversations', where: 'id = ?', whereArgs: [conversationId]);
-
-    await batch.commit(noResult: true);
-
-    // Sincronizar si está logueado
-    final String? userId = AuthService.currentUser?.id;
-    if (userId != null) {
-      await _syncService.syncPending();
+      // Sincronizar si está logueado
+      final String? userId = AuthService.currentUser?.id;
+      if (userId != null) {
+        await _syncService.syncPending();
+      }
+    } catch (e) {
+      debugPrint('Error in deleteConversation: $e');
+      rethrow;
     }
   }
 

@@ -10,6 +10,7 @@ import '../widgets/conversations_list.dart';
 import 'auth_page.dart';
 import 'edit_profile_page.dart';
 import 'chat_page.dart';
+import 'onboarding_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -32,11 +33,24 @@ class HomePage extends StatelessWidget {
     );
 
     return Obx(() {
+      // Show onboarding if user hasn't seen it
+      if (!authController.hasSeenOnboarding.value) {
+        return const OnboardingPage();
+      }
+
+      // Show auth if not logged in
+      if (!authController.isLoggedIn.value) {
+        return Scaffold(
+          backgroundColor: Colors.white,
+          body: const AuthPage(),
+        );
+      }
+
       // Show loading screen if initial loading
       if (appController.isInitialLoading.value) {
         return const LoadingScreen(
           message: 'Welcome to Eidos',
-          duration: Duration(seconds: 2),
+          duration: Duration(milliseconds: 300),
         );
       }
 
@@ -45,9 +59,8 @@ class HomePage extends StatelessWidget {
         body: SafeArea(
           child: Column(
             children: [
-              // Custom animated header - only show when not in auth view or edit profile
-              if (!navController.showAuthView.value &&
-                  !navController.showEditProfile.value)
+              // Custom animated header - only show when not in edit profile
+              if (!navController.showEditProfile.value)
                 AnimatedHeader(
                   isLoggedIn: authController.isLoggedIn.value,
                   userName: authController.userName.value,
@@ -55,7 +68,7 @@ class HomePage extends StatelessWidget {
                   userAvatarUrl: authController.userAvatarUrl.value.isNotEmpty
                       ? authController.userAvatarUrl.value
                       : null,
-                  onLogin: () => navController.showAuth(),
+                  onLogin: () => authController.signOut(),
                   onLogout: () => authController.signOut(),
                   onEditProfile: () => navController.showEditProfileView(),
                   onCreateChat: () => navController.showChat(),
@@ -64,9 +77,7 @@ class HomePage extends StatelessWidget {
               // Main content
               Expanded(
                 child: Obx(() {
-                  if (navController.showAuthView.value) {
-                    return const AuthPage();
-                  } else if (navController.showEditProfile.value) {
+                  if (navController.showEditProfile.value) {
                     return const EditProfilePage();
                   } else if (navController.showChatView.value) {
                     return const ChatPage();
