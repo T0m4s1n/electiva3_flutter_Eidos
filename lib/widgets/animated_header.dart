@@ -4,8 +4,6 @@ import 'package:lottie/lottie.dart';
 class AnimatedHeader extends StatefulWidget {
   final VoidCallback? onLogin;
   final VoidCallback? onCreateChat;
-  final Function(String)? onChatSelected;
-  final List<Map<String, String>>? recentChats; // Add recent chats parameter
   final bool isLoggedIn;
   final String userName;
   final String userEmail;
@@ -17,8 +15,6 @@ class AnimatedHeader extends StatefulWidget {
     super.key,
     this.onLogin,
     this.onCreateChat,
-    this.onChatSelected,
-    this.recentChats,
     this.isLoggedIn = false,
     this.userName = '',
     this.userEmail = '',
@@ -397,34 +393,13 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                     text: 'Create New Chat',
                                     onTap: () {
                                       widget.onCreateChat?.call();
-                                      // Don't close the menu when creating a new chat
+                                      _toggleMenu(); // Close the menu when creating a new chat
                                     },
                                     isPrimary: true,
                                   ),
                                 ],
                               ),
 
-                              const SizedBox(height: 24),
-
-                              // Recent chats section
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Recent Chats',
-                                    style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-
-                                  // Chat list or empty state
-                                  _buildChatSection(),
-                                ],
-                              ),
                             ],
                           ),
                         ),
@@ -437,54 +412,6 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildChatSection() {
-    final chats = widget.recentChats ?? [];
-
-    if (chats.isEmpty) {
-      // Empty state
-      return Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.black87),
-        ),
-        child: Column(
-          children: [
-            Icon(Icons.chat_bubble_outline, size: 48, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'You don\'t have any chats',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Start a new conversation to see your chats here',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 14,
-                color: Colors.grey[500],
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Chat list
-    return Column(
-      children: chats.take(3).map((chat) {
-        return _buildChatHistoryItem(chat);
-      }).toList(),
     );
   }
 
@@ -526,89 +453,6 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: isPrimary ? Colors.white : Colors.black87,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChatHistoryItem(Map<String, String> chat) {
-    return GestureDetector(
-      onTap: () {
-        widget.onChatSelected?.call(chat['id'] ?? '');
-        _toggleMenu();
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.black87),
-        ),
-        child: Row(
-          children: [
-            // Chat icon
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(
-                Icons.chat_bubble_outline,
-                color: Colors.grey,
-                size: 16,
-              ),
-            ),
-
-            const SizedBox(width: 12),
-
-            // Chat info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Chat title
-                  Text(
-                    chat['title'] ?? 'Untitled Chat',
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black87,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-
-                  const SizedBox(height: 4),
-
-                  // Last message
-                  Text(
-                    chat['lastMessage'] ?? 'No messages yet',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 11,
-                      color: Colors.grey[600],
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-
-            // Time
-            Text(
-              chat['time'] ?? 'now',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 10,
-                color: Colors.grey[500],
               ),
             ),
           ],

@@ -175,7 +175,7 @@ class AuthController extends GetxController {
 
     try {
       final response = await _supabase
-          .from('users')
+          .from('profiles')
           .select()
           .eq('id', currentUser.value!.id)
           .single();
@@ -188,11 +188,7 @@ class AuthController extends GetxController {
   // Update user profile
   Future<void> updateUserProfile({
     String? fullName,
-    String? bio,
     String? avatarUrl,
-    bool? notificationsEnabled,
-    bool? darkModeEnabled,
-    String? language,
   }) async {
     if (!isLoggedIn.value) throw Exception('User not logged in');
 
@@ -200,18 +196,10 @@ class AuthController extends GetxController {
       isLoading.value = true;
       final updates = <String, dynamic>{};
       if (fullName != null) updates['full_name'] = fullName;
-      if (bio != null) updates['bio'] = bio;
       if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
-      if (notificationsEnabled != null) {
-        updates['notifications_enabled'] = notificationsEnabled;
-      }
-      if (darkModeEnabled != null) {
-        updates['dark_mode_enabled'] = darkModeEnabled;
-      }
-      if (language != null) updates['language'] = language;
 
       await _supabase
-          .from('users')
+          .from('profiles')
           .update(updates)
           .eq('id', currentUser.value!.id);
 
@@ -230,8 +218,8 @@ class AuthController extends GetxController {
 
     try {
       isLoading.value = true;
-      // First delete from users table (this will cascade)
-      await _supabase.from('users').delete().eq('id', currentUser.value!.id);
+      // First delete from profiles table (this will cascade)
+      await _supabase.from('profiles').delete().eq('id', currentUser.value!.id);
 
       // Then delete from auth.users
       await _supabase.auth.admin.deleteUser(currentUser.value!.id);

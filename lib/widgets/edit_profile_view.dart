@@ -33,12 +33,8 @@ class _EditProfileViewState extends State<EditProfileView>
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
-  final _bioController = TextEditingController();
 
   bool _isLoading = false;
-  bool _notificationsEnabled = true;
-  bool _darkModeEnabled = false;
-  String _selectedLanguage = 'English';
   String _profilePicUrl = '';
   File? _selectedImage;
   final ImagePicker _picker = ImagePicker();
@@ -81,7 +77,6 @@ class _EditProfileViewState extends State<EditProfileView>
     _slideController.dispose();
     _nameController.dispose();
     _emailController.dispose();
-    _bioController.dispose();
     super.dispose();
   }
 
@@ -300,79 +295,6 @@ class _EditProfileViewState extends State<EditProfileView>
 
                                 const SizedBox(height: 20),
 
-                                // Bio field
-                                _buildTextField(
-                                  controller: _bioController,
-                                  label: 'Bio (Optional)',
-                                  hint: 'Tell us about yourself',
-                                  icon: Icons.info_outline,
-                                  maxLines: 3,
-                                ),
-
-                                const SizedBox(height: 32),
-
-                                // Preferences section
-                                const Text(
-                                  'Preferences',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-
-                                const SizedBox(height: 16),
-
-                                // Notifications toggle
-                                _buildToggleOption(
-                                  title: 'Push Notifications',
-                                  subtitle:
-                                      'Receive notifications for new messages',
-                                  value: _notificationsEnabled,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _notificationsEnabled = value;
-                                    });
-                                  },
-                                ),
-
-                                const SizedBox(height: 16),
-
-                                // Dark mode toggle
-                                _buildToggleOption(
-                                  title: 'Dark Mode',
-                                  subtitle: 'Use dark theme throughout the app',
-                                  value: _darkModeEnabled,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _darkModeEnabled = value;
-                                    });
-                                  },
-                                ),
-
-                                const SizedBox(height: 16),
-
-                                // Language selection
-                                _buildDropdownOption(
-                                  title: 'Language',
-                                  subtitle: 'Choose your preferred language',
-                                  value: _selectedLanguage,
-                                  items: [
-                                    'English',
-                                    'Spanish',
-                                    'French',
-                                    'German',
-                                  ],
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _selectedLanguage = value!;
-                                    });
-                                  },
-                                ),
-
-                                const SizedBox(height: 32),
-
                                 // Save button
                                 GestureDetector(
                                   onTap: _isLoading ? null : _handleSave,
@@ -525,128 +447,6 @@ class _EditProfileViewState extends State<EditProfileView>
     );
   }
 
-  Widget _buildToggleOption({
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black87),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeThumbColor: Colors.black87,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDropdownOption({
-    required String title,
-    required String subtitle,
-    required String value,
-    required List<String> items,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black87),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 14,
-              color: Colors.grey[600],
-            ),
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: value,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey[300]!),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey[300]!),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.black87),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
-              ),
-            ),
-            items: items.map((String item) {
-              return DropdownMenuItem<String>(
-                value: item,
-                child: Text(
-                  item,
-                  style: const TextStyle(fontFamily: 'Poppins'),
-                ),
-              );
-            }).toList(),
-            onChanged: onChanged,
-          ),
-        ],
-      ),
-    );
-  }
-
   void _changeProfilePicture() {
     showModalBottomSheet(
       context: context,
@@ -693,11 +493,11 @@ class _EditProfileViewState extends State<EditProfileView>
                       try {
                         await AuthService.deleteProfilePicture();
                         await AuthService.updateUserProfile(avatarUrl: '');
-                        setState(() {
-                          _selectedImage = null;
-                          _profilePicUrl = '';
-                        });
-                        if (mounted) {
+                      setState(() {
+                        _selectedImage = null;
+                        _profilePicUrl = '';
+                      });
+                      if (mounted) {
                           scaffoldMessenger.showSnackBar(
                             const SnackBar(
                               content: Text(
@@ -840,13 +640,7 @@ class _EditProfileViewState extends State<EditProfileView>
         // Update user profile in Supabase
         await AuthService.updateUserProfile(
           fullName: _nameController.text.trim(),
-          bio: _bioController.text.trim().isEmpty
-              ? null
-              : _bioController.text.trim(),
           avatarUrl: avatarUrl,
-          notificationsEnabled: _notificationsEnabled,
-          darkModeEnabled: _darkModeEnabled,
-          language: _selectedLanguage,
         );
 
         if (mounted) {
@@ -870,7 +664,7 @@ class _EditProfileViewState extends State<EditProfileView>
             widget.onSaveProfile!(
               _nameController.text.trim(),
               _emailController.text.trim(),
-              _bioController.text.trim(),
+              '',
             );
           }
 

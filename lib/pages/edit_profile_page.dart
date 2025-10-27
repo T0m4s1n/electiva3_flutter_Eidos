@@ -19,7 +19,7 @@ class EditProfilePage extends StatelessWidget {
         onBack: () => navController.hideEditProfileView(),
         onSaveProfile: (name, email, bio) async {
           try {
-            await authController.updateUserProfile(fullName: name, bio: bio);
+            await authController.updateUserProfile(fullName: name);
 
             navController.hideEditProfileView();
 

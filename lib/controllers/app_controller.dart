@@ -1,5 +1,4 @@
 import 'package:get/get.dart';
-import 'auth_controller.dart';
 
 class AppController extends GetxController {
   // Observable variables for app-wide state
@@ -25,26 +24,19 @@ class AppController extends GetxController {
   // Theme management
   void toggleDarkMode() {
     isDarkMode.value = !isDarkMode.value;
-    // You can also update the user profile here
-    Get.find<AuthController>().updateUserProfile(
-      darkModeEnabled: isDarkMode.value,
-    );
+    // Dark mode is now managed locally in app state
   }
 
   // Language management
   void changeLanguage(String language) {
     currentLanguage.value = language;
-    // You can also update the user profile here
-    Get.find<AuthController>().updateUserProfile(language: language);
+    // Language is now managed locally in app state
   }
 
   // Notifications management
   void toggleNotifications() {
     notificationsEnabled.value = !notificationsEnabled.value;
-    // You can also update the user profile here
-    Get.find<AuthController>().updateUserProfile(
-      notificationsEnabled: notificationsEnabled.value,
-    );
+    // Notifications are now managed locally in app state
   }
 
   // Chat management

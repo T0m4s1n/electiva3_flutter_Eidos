@@ -94,7 +94,7 @@ class AuthService {
 
     try {
       final response = await _supabase
-          .from('users')
+          .from('profiles')
           .select()
           .eq('id', currentUser!.id)
           .single();
@@ -107,28 +107,16 @@ class AuthService {
   // Update user profile
   static Future<void> updateUserProfile({
     String? fullName,
-    String? bio,
     String? avatarUrl,
-    bool? notificationsEnabled,
-    bool? darkModeEnabled,
-    String? language,
   }) async {
     if (!isLoggedIn) throw Exception('User not logged in');
 
     try {
       final updates = <String, dynamic>{};
       if (fullName != null) updates['full_name'] = fullName;
-      if (bio != null) updates['bio'] = bio;
       if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
-      if (notificationsEnabled != null) {
-        updates['notifications_enabled'] = notificationsEnabled;
-      }
-      if (darkModeEnabled != null) {
-        updates['dark_mode_enabled'] = darkModeEnabled;
-      }
-      if (language != null) updates['language'] = language;
 
-      await _supabase.from('users').update(updates).eq('id', currentUser!.id);
+      await _supabase.from('profiles').update(updates).eq('id', currentUser!.id);
     } catch (e) {
       rethrow;
     }
@@ -139,8 +127,8 @@ class AuthService {
     if (!isLoggedIn) throw Exception('User not logged in');
 
     try {
-      // First delete from users table (this will cascade)
-      await _supabase.from('users').delete().eq('id', currentUser!.id);
+      // First delete from profiles table (this will cascade)
+      await _supabase.from('profiles').delete().eq('id', currentUser!.id);
 
       // Then delete from auth.users
       await _supabase.auth.admin.deleteUser(currentUser!.id);
@@ -223,11 +211,7 @@ class UserProfile {
   final String id;
   final String email;
   final String? fullName;
-  final String? bio;
   final String? avatarUrl;
-  final bool notificationsEnabled;
-  final bool darkModeEnabled;
-  final String language;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -235,11 +219,7 @@ class UserProfile {
     required this.id,
     required this.email,
     this.fullName,
-    this.bio,
     this.avatarUrl,
-    required this.notificationsEnabled,
-    required this.darkModeEnabled,
-    required this.language,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -249,11 +229,7 @@ class UserProfile {
       id: map['id'] ?? '',
       email: map['email'] ?? '',
       fullName: map['full_name'],
-      bio: map['bio'],
       avatarUrl: map['avatar_url'],
-      notificationsEnabled: map['notifications_enabled'] ?? true,
-      darkModeEnabled: map['dark_mode_enabled'] ?? false,
-      language: map['language'] ?? 'English',
       createdAt: DateTime.parse(map['created_at']),
       updatedAt: DateTime.parse(map['updated_at']),
     );
@@ -264,11 +240,7 @@ class UserProfile {
       'id': id,
       'email': email,
       'full_name': fullName,
-      'bio': bio,
       'avatar_url': avatarUrl,
-      'notifications_enabled': notificationsEnabled,
-      'dark_mode_enabled': darkModeEnabled,
-      'language': language,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };

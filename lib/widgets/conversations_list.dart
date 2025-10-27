@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:lottie/lottie.dart';
 import '../controllers/chat_controller.dart';
 import '../controllers/navigation_controller.dart';
 import '../models/chat_models.dart';
@@ -99,7 +100,15 @@ class _ConversationsListState extends State<ConversationsList> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey[400]),
+          // Documents.json SVG from Lottie
+          SizedBox(
+            width: 200,
+            height: 200,
+            child: Lottie.asset(
+              'assets/fonts/svgs/documents.json',
+              fit: BoxFit.contain,
+            ),
+          ),
           const SizedBox(height: 16),
           Text(
             'No conversations yet',

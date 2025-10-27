@@ -59,22 +59,6 @@ class HomePage extends StatelessWidget {
                   onLogout: () => authController.signOut(),
                   onEditProfile: () => navController.showEditProfileView(),
                   onCreateChat: () => navController.showChat(),
-                  onChatSelected: (chatId) {
-                    navController.showLoading('Opening chat...');
-                    Future.delayed(const Duration(seconds: 2), () {
-                      navController.hideLoading();
-                    });
-                  },
-                  recentChats: appController.recentChats
-                      .map(
-                        (chat) => {
-                          'id': (chat['id'] ?? '').toString(),
-                          'title': (chat['title'] ?? '').toString(),
-                          'lastMessage': (chat['lastMessage'] ?? '').toString(),
-                          'time': (chat['time'] ?? '').toString(),
-                        },
-                      )
-                      .toList(),
                 ),
 
               // Main content
