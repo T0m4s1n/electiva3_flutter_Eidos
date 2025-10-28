@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/preferences_controller.dart';
 import '../controllers/theme_controller.dart';
+import '../models/chat_rule.dart';
 
 class PreferencesPage extends StatelessWidget {
   const PreferencesPage({super.key});
@@ -89,6 +90,17 @@ class PreferencesPage extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       _buildChatPreferencesCard(context, preferencesController),
+
+                      const SizedBox(height: 32),
+
+                      // Chat Rules Section
+                      _buildSectionHeader(
+                        context,
+                        'Reglas del Chat',
+                        Icons.rule_outlined,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildChatRulesCard(context, preferencesController),
                     ],
                   ),
                 ),
@@ -338,6 +350,469 @@ class PreferencesPage extends StatelessWidget {
                   height: 1.4,
                 ),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatRulesCard(
+    BuildContext context,
+    PreferencesController preferencesController,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardTheme.color,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? Colors.grey[600]!
+              : Colors.black87,
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Reglas Personalizadas',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              GestureDetector(
+                onTap: () => _showAddRuleDialog(context, preferencesController),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.add, color: Colors.white, size: 16),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Define qué debe y qué no debe hacer la IA',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 14,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.grey[400]
+                  : Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Obx(() {
+            if (preferencesController.chatRules.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey[800]
+                      : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[600]!
+                        : Colors.grey[300]!,
+                  ),
+                ),
+                child: Text(
+                  'No hay reglas definidas. Toca el botón + para agregar una regla.',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 14,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[400]
+                        : Colors.grey[600],
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              );
+            }
+
+            return Column(
+              children: [
+                // Positive rules
+                if (preferencesController.positiveRules.isNotEmpty) ...[
+                  _buildRulesSection(
+                    context,
+                    'Reglas Positivas (Debe hacer)',
+                    preferencesController.positiveRules,
+                    Colors.green,
+                    Icons.check_circle_outline,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                // Negative rules
+                if (preferencesController.negativeRules.isNotEmpty) ...[
+                  _buildRulesSection(
+                    context,
+                    'Reglas Negativas (No debe hacer)',
+                    preferencesController.negativeRules,
+                    Colors.red,
+                    Icons.cancel_outlined,
+                  ),
+                ],
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRulesSection(
+    BuildContext context,
+    String title,
+    List<ChatRule> rules,
+    Color color,
+    IconData icon,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: color, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...rules.map((rule) => _buildRuleItem(context, rule)),
+      ],
+    );
+  }
+
+  Widget _buildRuleItem(BuildContext context, ChatRule rule) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Colors.grey[800]
+            : Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? Colors.grey[600]!
+              : Colors.grey[300]!,
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              rule.text,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onTap: () => _showEditRuleDialog(context, rule),
+                child: Icon(
+                  Icons.edit_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => _showDeleteRuleDialog(context, rule),
+                child: Icon(Icons.delete_outline, color: Colors.red, size: 16),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddRuleDialog(
+    BuildContext context,
+    PreferencesController controller,
+  ) {
+    final TextEditingController textController = TextEditingController();
+    bool isPositive = true;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: Theme.of(context).cardTheme.color,
+          title: Text(
+            'Agregar Regla',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: textController,
+                decoration: InputDecoration(
+                  labelText: 'Texto de la regla',
+                  labelStyle: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: RadioListTile<bool>(
+                      title: Text(
+                        'Debe hacer',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 14,
+                          color: Colors.green,
+                        ),
+                      ),
+                      value: true,
+                      groupValue: isPositive,
+                      onChanged: (value) => setState(() => isPositive = value!),
+                    ),
+                  ),
+                  Expanded(
+                    child: RadioListTile<bool>(
+                      title: Text(
+                        'No debe hacer',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 14,
+                          color: Colors.red,
+                        ),
+                      ),
+                      value: false,
+                      groupValue: isPositive,
+                      onChanged: (value) => setState(() => isPositive = value!),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Cancelar',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (textController.text.trim().isNotEmpty) {
+                  await controller.addChatRule(
+                    textController.text.trim(),
+                    isPositive,
+                  );
+                  Navigator.of(context).pop();
+                }
+              },
+              child: Text(
+                'Agregar',
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditRuleDialog(BuildContext context, ChatRule rule) {
+    final TextEditingController textController = TextEditingController(
+      text: rule.text,
+    );
+    bool isPositive = rule.isPositive;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: Theme.of(context).cardTheme.color,
+          title: Text(
+            'Editar Regla',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: textController,
+                decoration: InputDecoration(
+                  labelText: 'Texto de la regla',
+                  labelStyle: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: RadioListTile<bool>(
+                      title: Text(
+                        'Debe hacer',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 14,
+                          color: Colors.green,
+                        ),
+                      ),
+                      value: true,
+                      groupValue: isPositive,
+                      onChanged: (value) => setState(() => isPositive = value!),
+                    ),
+                  ),
+                  Expanded(
+                    child: RadioListTile<bool>(
+                      title: Text(
+                        'No debe hacer',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 14,
+                          color: Colors.red,
+                        ),
+                      ),
+                      value: false,
+                      groupValue: isPositive,
+                      onChanged: (value) => setState(() => isPositive = value!),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Cancelar',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (textController.text.trim().isNotEmpty) {
+                  await Get.find<PreferencesController>().updateChatRule(
+                    rule.id,
+                    textController.text.trim(),
+                    isPositive,
+                  );
+                  Navigator.of(context).pop();
+                }
+              },
+              child: Text(
+                'Guardar',
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteRuleDialog(BuildContext context, ChatRule rule) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).cardTheme.color,
+        title: Text(
+          'Eliminar Regla',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
+        content: Text(
+          '¿Estás seguro de que quieres eliminar esta regla?',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'Cancelar',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await Get.find<PreferencesController>().deleteChatRule(rule.id);
+              Navigator.of(context).pop();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text(
+              'Eliminar',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
             ),
           ),
         ],

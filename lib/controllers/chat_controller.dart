@@ -296,6 +296,16 @@ class ChatController extends GetxController {
         debugPrint(
           'Using AI personality: ${preferencesController.aiPersonality.value.displayName}',
         );
+
+        // Log if there are custom rules
+        if (preferencesController.chatRules.isNotEmpty) {
+          debugPrint(
+            'Applying ${preferencesController.chatRules.length} custom chat rules',
+          );
+          debugPrint('Full system prompt: $systemMessageContent');
+        } else {
+          debugPrint('No custom rules found');
+        }
       } catch (e) {
         debugPrint('Error getting preferences controller: $e');
       }
@@ -305,7 +315,9 @@ class ChatController extends GetxController {
             await ChatService.getConversation(currentConversationId.value);
         if (conversation?.summary != null &&
             conversation!.summary!.isNotEmpty) {
-          systemMessageContent = _getSystemMessage(conversation.summary!);
+          // Combine personalized context with custom rules
+          String contextMessage = _getSystemMessage(conversation.summary!);
+          systemMessageContent = '$systemMessageContent\n\n$contextMessage';
           debugPrint(
             'Using personalized system message for context: ${conversation.summary}',
           );

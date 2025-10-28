@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../models/chat_rule.dart';
+import '../services/hive_storage_service.dart';
+import 'package:uuid/uuid.dart';
 
 enum AIPersonality {
   precise(
@@ -26,6 +28,7 @@ class PreferencesController extends GetxController {
   // Observable variables for preferences
   final Rx<AIPersonality> aiPersonality = AIPersonality.precise.obs;
   final RxBool isDarkMode = false.obs;
+  final RxList<ChatRule> chatRules = <ChatRule>[].obs;
 
   @override
   void onInit() {
@@ -33,24 +36,29 @@ class PreferencesController extends GetxController {
     _loadPreferences();
   }
 
-  // Load preferences from storage
+  // Load preferences from Hive storage
   Future<void> _loadPreferences() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-
       // Load AI personality
-      final String? personalityString = prefs.getString('ai_personality');
-      if (personalityString != null) {
-        aiPersonality.value = AIPersonality.values.firstWhere(
-          (p) => p.name == personalityString,
-          orElse: () => AIPersonality.precise,
-        );
-      }
+      aiPersonality.value = HiveStorageService.loadAIPersonality();
 
       // Load theme preference
-      final bool? isDark = prefs.getBool('isDarkMode');
-      if (isDark != null) {
-        isDarkMode.value = isDark;
+      isDarkMode.value = HiveStorageService.loadThemeMode();
+
+      // Load chat rules
+      chatRules.value = HiveStorageService.getAllChatRules();
+
+      debugPrint('Preferences loaded successfully');
+      debugPrint('AI Personality: ${aiPersonality.value.displayName}');
+      debugPrint('Theme Mode: ${isDarkMode.value ? 'Dark' : 'Light'}');
+      debugPrint('Chat Rules loaded: ${chatRules.length}');
+
+      // Log each rule for debugging
+      for (int i = 0; i < chatRules.length; i++) {
+        final rule = chatRules[i];
+        debugPrint(
+          'Rule $i: ${rule.text} (${rule.isPositive ? 'positive' : 'negative'})',
+        );
       }
     } catch (e) {
       debugPrint('Error loading preferences: $e');
@@ -59,11 +67,10 @@ class PreferencesController extends GetxController {
 
   // Save AI personality preference
   Future<void> setAIPersonality(AIPersonality personality) async {
-    aiPersonality.value = personality;
-
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('ai_personality', personality.name);
+      aiPersonality.value = personality;
+      await HiveStorageService.saveAIPersonality(personality);
+      debugPrint('AI personality updated: ${personality.displayName}');
     } catch (e) {
       debugPrint('Error saving AI personality preference: $e');
     }
@@ -71,16 +78,130 @@ class PreferencesController extends GetxController {
 
   // Save theme preference
   Future<void> setThemeMode(bool dark) async {
-    isDarkMode.value = dark;
-
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isDarkMode', dark);
+      isDarkMode.value = dark;
+      await HiveStorageService.saveThemeMode(dark);
+      debugPrint('Theme mode updated: ${dark ? 'Dark' : 'Light'}');
     } catch (e) {
       debugPrint('Error saving theme preference: $e');
     }
   }
 
-  // Get current AI personality system prompt
-  String get currentSystemPrompt => aiPersonality.value.systemPrompt;
+  // ========== CHAT RULES METHODS ==========
+
+  /// Add a new chat rule
+  Future<void> addChatRule(String text, bool isPositive) async {
+    try {
+      final String id = const Uuid().v4();
+      final DateTime now = DateTime.now();
+
+      final ChatRule newRule = ChatRule(
+        id: id,
+        text: text.trim(),
+        isPositive: isPositive,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      await HiveStorageService.addChatRule(newRule);
+      chatRules.add(newRule);
+
+      debugPrint('Chat rule added: ${newRule.text}');
+    } catch (e) {
+      debugPrint('Error adding chat rule: $e');
+      rethrow;
+    }
+  }
+
+  /// Update an existing chat rule
+  Future<void> updateChatRule(
+    String ruleId,
+    String text,
+    bool isPositive,
+  ) async {
+    try {
+      final ChatRule? existingRule = chatRules.firstWhereOrNull(
+        (r) => r.id == ruleId,
+      );
+      if (existingRule == null) {
+        throw Exception('Rule not found');
+      }
+
+      final ChatRule updatedRule = existingRule.copyWith(
+        text: text.trim(),
+        isPositive: isPositive,
+        updatedAt: DateTime.now(),
+      );
+
+      await HiveStorageService.updateChatRule(updatedRule);
+
+      final int index = chatRules.indexWhere((r) => r.id == ruleId);
+      if (index != -1) {
+        chatRules[index] = updatedRule;
+      }
+
+      debugPrint('Chat rule updated: ${updatedRule.text}');
+    } catch (e) {
+      debugPrint('Error updating chat rule: $e');
+      rethrow;
+    }
+  }
+
+  /// Delete a chat rule
+  Future<void> deleteChatRule(String ruleId) async {
+    try {
+      await HiveStorageService.deleteChatRule(ruleId);
+      chatRules.removeWhere((r) => r.id == ruleId);
+      debugPrint('Chat rule deleted: $ruleId');
+    } catch (e) {
+      debugPrint('Error deleting chat rule: $e');
+      rethrow;
+    }
+  }
+
+  /// Get positive rules (things AI should do)
+  List<ChatRule> get positiveRules =>
+      chatRules.where((r) => r.isPositive).toList();
+
+  /// Get negative rules (things AI should not do)
+  List<ChatRule> get negativeRules =>
+      chatRules.where((r) => !r.isPositive).toList();
+
+  /// Clear all chat rules
+  Future<void> clearAllChatRules() async {
+    try {
+      await HiveStorageService.clearAllChatRules();
+      chatRules.clear();
+      debugPrint('All chat rules cleared');
+    } catch (e) {
+      debugPrint('Error clearing chat rules: $e');
+      rethrow;
+    }
+  }
+
+  /// Get current AI personality system prompt with rules
+  String get currentSystemPrompt {
+    String basePrompt = aiPersonality.value.systemPrompt;
+
+    // Get rules directly from Hive to ensure we have the latest data
+    String rulesPrompt = HiveStorageService.generateRulesPrompt();
+
+    debugPrint('Base prompt: $basePrompt');
+    debugPrint('Rules prompt: $rulesPrompt');
+    debugPrint('Total chat rules in controller: ${chatRules.length}');
+    debugPrint(
+      'Total chat rules in Hive: ${HiveStorageService.getChatRulesCount()}',
+    );
+
+    if (rulesPrompt.isNotEmpty) {
+      String combinedPrompt = '$basePrompt\n\n$rulesPrompt';
+      debugPrint('Combined prompt: $combinedPrompt');
+      return combinedPrompt;
+    }
+
+    return basePrompt;
+  }
+
+  /// Get rules-only prompt for display purposes
+  String get rulesOnlyPrompt => HiveStorageService.generateRulesPrompt();
 }

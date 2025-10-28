@@ -6,9 +6,19 @@ import 'routes/app_routes.dart';
 import 'bindings/app_bindings.dart';
 import 'config/app_theme.dart';
 import 'controllers/theme_controller.dart';
+import 'services/hive_storage_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    // Initialize Hive storage
+    await HiveStorageService.init();
+    debugPrint('Hive storage initialized successfully');
+  } catch (e) {
+    debugPrint('Error initializing Hive storage: $e');
+    // Continue with app initialization even if Hive fails
+  }
 
   try {
     // Load environment variables
@@ -36,16 +46,18 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeController themeController = Get.put(ThemeController());
-    
-    return Obx(() => GetMaterialApp(
-      title: 'Eidos',
-      debugShowCheckedModeBanner: false,
-      initialBinding: InitialBinding(),
-      initialRoute: AppRoutes.home,
-      getPages: AppRoutes.routes,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: themeController.themeMode.value,
-    ));
+
+    return Obx(
+      () => GetMaterialApp(
+        title: 'Eidos',
+        debugShowCheckedModeBanner: false,
+        initialBinding: InitialBinding(),
+        initialRoute: AppRoutes.home,
+        getPages: AppRoutes.routes,
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: themeController.themeMode.value,
+      ),
+    );
   }
 }
