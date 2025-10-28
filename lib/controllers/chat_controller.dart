@@ -6,6 +6,7 @@ import 'dart:io';
 import '../services/chat_service.dart';
 import '../models/chat_models.dart';
 import '../controllers/navigation_controller.dart';
+import '../controllers/preferences_controller.dart';
 import '../widgets/document_editor.dart';
 
 class ChatController extends GetxController {
@@ -17,7 +18,7 @@ class ChatController extends GetxController {
   final RxString conversationTitle = 'New Chat'.obs;
   final RxBool hasMessages = false.obs;
   final RxBool isNewChat = true.obs; // Track if this is a brand new chat
-  
+
   // Document mode variables
   final RxBool isDocumentMode = false.obs;
   final RxBool isGeneratingDocument = false.obs;
@@ -58,12 +59,12 @@ class ChatController extends GetxController {
           );
 
       debugPrint('Created new conversation: ${conversation.id}');
-      
+
       // Verify the conversation was saved to the database
       final ConversationLocal? verifyConv = await ChatService.getConversation(
         conversation.id,
       );
-      
+
       if (verifyConv == null) {
         debugPrint('ERROR: Conversation was not saved to database!');
         debugPrint('Conversation ID: ${conversation.id}');
@@ -100,7 +101,7 @@ class ChatController extends GetxController {
   /// Detect if the message is requesting document creation
   bool _isDocumentRequest(String messageText) {
     final String lowerMessage = messageText.toLowerCase();
-    
+
     final List<String> documentKeywords = [
       'crear un documento',
       'escribir un documento',
@@ -127,7 +128,7 @@ class ChatController extends GetxController {
       'compose a document',
       'draft a document',
     ];
-    
+
     return documentKeywords.any((keyword) => lowerMessage.contains(keyword));
   }
 
@@ -144,7 +145,7 @@ class ChatController extends GetxController {
 
       // Check if message is requesting document creation
       final bool isDocumentRequest = _isDocumentRequest(messageText);
-      
+
       // Check if we're in document mode OR if this is a document request
       if (isDocumentMode.value || isDocumentRequest) {
         // If not already in document mode, activate it
@@ -152,7 +153,7 @@ class ChatController extends GetxController {
           debugPrint('Document mode activated from message: $messageText');
           isDocumentMode.value = true;
         }
-        
+
         // In document mode, generate document with checklist
         await generateDocumentWithChecklist(messageText);
       } else {
@@ -161,35 +162,45 @@ class ChatController extends GetxController {
         debugPrint('=== Creating user message ===');
         debugPrint('Conversation ID: ${currentConversationId.value}');
         debugPrint('Message text: $messageText');
-        
+
         final MessageLocal userMessage = await ChatService.createUserMessage(
           conversationId: currentConversationId.value,
           text: messageText,
         );
-        
+
         debugPrint('User message created with ID: ${userMessage.id}');
         debugPrint('Message seq: ${userMessage.seq}');
         debugPrint('Message role: ${userMessage.role}');
         debugPrint('Message content: ${userMessage.content}');
-        
+
         // Verify the message was saved to database
-        await Future.delayed(const Duration(milliseconds: 200)); // Give time for DB to save
+        await Future.delayed(
+          const Duration(milliseconds: 200),
+        ); // Give time for DB to save
         final List<MessageLocal> verifyMessages = await ChatService.getMessages(
           currentConversationId.value,
         );
-        final int userMsgCount = verifyMessages.where((m) => m.role == 'user').length;
-        debugPrint('Verification: Found ${verifyMessages.length} total messages in database');
-        debugPrint('Verification: Found $userMsgCount user messages in database');
+        final int userMsgCount = verifyMessages
+            .where((m) => m.role == 'user')
+            .length;
+        debugPrint(
+          'Verification: Found ${verifyMessages.length} total messages in database',
+        );
+        debugPrint(
+          'Verification: Found $userMsgCount user messages in database',
+        );
 
         messages.add(userMessage);
         hasMessages.value = true;
-        
-        debugPrint('Added user message to observable list. Total messages: ${messages.length}');
+
+        debugPrint(
+          'Added user message to observable list. Total messages: ${messages.length}',
+        );
 
         // Update conversation title and generate context if it's the first message
         if (messages.length == 1) {
           await _updateConversationTitle(messageText);
-          
+
           // Generate and save context for personalized AI responses
           await _generateAndSaveContext(messageText);
         }
@@ -229,21 +240,27 @@ class ChatController extends GetxController {
       try {
         // Use local messages from the observable list as they're already loaded and up-to-date
         final List<Map<String, dynamic>> formattedMessages = messages
-            .map((MessageLocal msg) => {
-                  'id': msg.id,
-                  'role': msg.role,
-                  'content': msg.content,
-                  'created_at': msg.createdAt,
-                  'seq': msg.seq,
-                })
+            .map(
+              (MessageLocal msg) => {
+                'id': msg.id,
+                'role': msg.role,
+                'content': msg.content,
+                'created_at': msg.createdAt,
+                'seq': msg.seq,
+              },
+            )
             .toList();
-        
-        debugPrint('Using local messages: ${formattedMessages.length} messages');
+
+        debugPrint(
+          'Using local messages: ${formattedMessages.length} messages',
+        );
         for (int i = 0; i < formattedMessages.length; i++) {
           final msg = formattedMessages[i];
-          debugPrint('Local message $i: role=${msg['role']}, content=${msg['content']}');
+          debugPrint(
+            'Local message $i: role=${msg['role']}, content=${msg['content']}',
+          );
         }
-        
+
         context = {
           'conversation': {
             'id': currentConversationId.value,
@@ -264,20 +281,34 @@ class ChatController extends GetxController {
               'content': {'text': userMessage},
               'created_at': DateTime.now().toUtc().toIso8601String(),
               'seq': 0,
-            }
+            },
           ],
         };
       }
 
       // Get the conversation context for personalized system message
-      String systemMessageContent = 'You are a helpful AI assistant. Respond in a friendly and helpful manner.';
+      String systemMessageContent =
+          'You are a helpful AI assistant. Respond in a friendly and helpful manner.';
       try {
-        final ConversationLocal? conversation = await ChatService.getConversation(
-          currentConversationId.value,
+        final PreferencesController preferencesController =
+            Get.find<PreferencesController>();
+        systemMessageContent = preferencesController.currentSystemPrompt;
+        debugPrint(
+          'Using AI personality: ${preferencesController.aiPersonality.value.displayName}',
         );
-        if (conversation?.summary != null && conversation!.summary!.isNotEmpty) {
+      } catch (e) {
+        debugPrint('Error getting preferences controller: $e');
+      }
+
+      try {
+        final ConversationLocal? conversation =
+            await ChatService.getConversation(currentConversationId.value);
+        if (conversation?.summary != null &&
+            conversation!.summary!.isNotEmpty) {
           systemMessageContent = _getSystemMessage(conversation.summary!);
-          debugPrint('Using personalized system message for context: ${conversation.summary}');
+          debugPrint(
+            'Using personalized system message for context: ${conversation.summary}',
+          );
         }
       } catch (e) {
         debugPrint('Error getting conversation context: $e');
@@ -285,58 +316,60 @@ class ChatController extends GetxController {
 
       // Prepare messages for OpenAI API
       final List<Map<String, String>> openaiMessages = [
-        {
-          'role': 'system',
-          'content': systemMessageContent,
-        },
+        {'role': 'system', 'content': systemMessageContent},
         ...context['messages']
             .where(
               (Map<String, dynamic> msg) =>
                   msg['role'] !=
                   'system', // Filtrar mensajes de error del sistema
             )
-            .map<Map<String, String>>(
-              (Map<String, dynamic> msg) {
-                // Extract text content properly
-                String textContent = '';
-                try {
-                  final dynamic contentRaw = msg['content'];
-                  
-                  if (contentRaw == null) {
-                    debugPrint('Warning: Content is null for message: ${msg['id']}');
-                    textContent = '';
-                  } else if (contentRaw is Map) {
-                    final Map<String, dynamic> content = contentRaw as Map<String, dynamic>;
-                    textContent = content['text'] as String? ?? '';
-                    
-                    // If text is empty, try to get any string value from the map
-                    if (textContent.isEmpty && content.isNotEmpty) {
-                      final firstValue = content.values.first;
-                      textContent = firstValue is String ? firstValue : firstValue.toString();
-                    }
-                  } else if (contentRaw is String) {
-                    textContent = contentRaw;
-                  } else {
-                    textContent = contentRaw.toString();
-                  }
-                } catch (e, stackTrace) {
-                  debugPrint('Error extracting message content: $e');
-                  debugPrint('Stack trace: $stackTrace');
-                  debugPrint('Message data: $msg');
+            .map<Map<String, String>>((Map<String, dynamic> msg) {
+              // Extract text content properly
+              String textContent = '';
+              try {
+                final dynamic contentRaw = msg['content'];
+
+                if (contentRaw == null) {
+                  debugPrint(
+                    'Warning: Content is null for message: ${msg['id']}',
+                  );
                   textContent = '';
+                } else if (contentRaw is Map) {
+                  final Map<String, dynamic> content =
+                      contentRaw as Map<String, dynamic>;
+                  textContent = content['text'] as String? ?? '';
+
+                  // If text is empty, try to get any string value from the map
+                  if (textContent.isEmpty && content.isNotEmpty) {
+                    final firstValue = content.values.first;
+                    textContent = firstValue is String
+                        ? firstValue
+                        : firstValue.toString();
+                  }
+                } else if (contentRaw is String) {
+                  textContent = contentRaw;
+                } else {
+                  textContent = contentRaw.toString();
                 }
-                
-                // Validate that we have valid content
-                if (textContent.isEmpty) {
-                  debugPrint('Warning: Empty message content for message: ${msg['id']}');
-                }
-                
-                return {
-                  'role': msg['role'] as String,
-                  'content': _cleanMessageContent(textContent),
-                };
-              },
-            )
+              } catch (e, stackTrace) {
+                debugPrint('Error extracting message content: $e');
+                debugPrint('Stack trace: $stackTrace');
+                debugPrint('Message data: $msg');
+                textContent = '';
+              }
+
+              // Validate that we have valid content
+              if (textContent.isEmpty) {
+                debugPrint(
+                  'Warning: Empty message content for message: ${msg['id']}',
+                );
+              }
+
+              return {
+                'role': msg['role'] as String,
+                'content': _cleanMessageContent(textContent),
+              };
+            })
             .toList(),
       ];
 
@@ -353,18 +386,22 @@ class ChatController extends GetxController {
       debugPrint(
         'Sending ${validMessages.length} valid messages to OpenAI (${openaiMessages.length} total)',
       );
-      
+
       // Ensure we have at least a system message and one user message
       if (validMessages.length < 2) {
-        debugPrint('Warning: Only ${validMessages.length} valid messages. Adding user message manually.');
+        debugPrint(
+          'Warning: Only ${validMessages.length} valid messages. Adding user message manually.',
+        );
         // If we don't have enough messages, add the user message directly
         validMessages.add({
           'role': 'user',
           'content': _cleanMessageContent(userMessage),
         });
-        debugPrint('Added user message directly. Total messages: ${validMessages.length}');
+        debugPrint(
+          'Added user message directly. Total messages: ${validMessages.length}',
+        );
       }
-      
+
       for (int i = 0; i < validMessages.length; i++) {
         final msg = validMessages[i];
         final content = msg['content'] ?? '';
@@ -377,10 +414,14 @@ class ChatController extends GetxController {
       // Call OpenAI API
       debugPrint('Calling OpenAI API with ${validMessages.length} messages');
       final String aiResponse = await _callOpenAIAPI(validMessages);
-      debugPrint('Received AI response: ${aiResponse.substring(0, aiResponse.length > 100 ? 100 : aiResponse.length)}...');
+      debugPrint(
+        'Received AI response: ${aiResponse.substring(0, aiResponse.length > 100 ? 100 : aiResponse.length)}...',
+      );
 
       // Validate the response
-      if (aiResponse.isEmpty || aiResponse.trim().isEmpty || aiResponse == '0') {
+      if (aiResponse.isEmpty ||
+          aiResponse.trim().isEmpty ||
+          aiResponse == '0') {
         throw Exception('Invalid or empty response from AI');
       }
 
@@ -388,7 +429,7 @@ class ChatController extends GetxController {
       debugPrint('=== Saving AI response to local database ===');
       debugPrint('Conversation ID: ${currentConversationId.value}');
       debugPrint('AI response length: ${aiResponse.length}');
-      
+
       final MessageLocal aiMessage = await ChatService.createAssistantMessage(
         conversationId: currentConversationId.value,
         text: aiResponse,
@@ -397,19 +438,25 @@ class ChatController extends GetxController {
       debugPrint('AI message created with ID: ${aiMessage.id}');
       debugPrint('AI message role: ${aiMessage.role}');
       debugPrint('AI message seq: ${aiMessage.seq}');
-      
+
       messages.add(aiMessage);
-      
+
       // Wait for database to persist
       await Future.delayed(const Duration(milliseconds: 200));
-      
+
       // Verify AI message was saved
       final List<MessageLocal> savedMessages = await ChatService.getMessages(
         currentConversationId.value,
       );
-      final int assistantMsgCount = savedMessages.where((m) => m.role == 'assistant').length;
-      final int userMsgCount = savedMessages.where((m) => m.role == 'user').length;
-      debugPrint('Total messages in conversation after AI response: ${savedMessages.length}');
+      final int assistantMsgCount = savedMessages
+          .where((m) => m.role == 'assistant')
+          .length;
+      final int userMsgCount = savedMessages
+          .where((m) => m.role == 'user')
+          .length;
+      debugPrint(
+        'Total messages in conversation after AI response: ${savedMessages.length}',
+      );
       debugPrint('  - User messages: $userMsgCount');
       debugPrint('  - Assistant messages: $assistantMsgCount');
 
@@ -480,21 +527,21 @@ class ChatController extends GetxController {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(responseBody);
-        
+
         // Validate the response structure
-        if (responseData['choices'] == null || 
+        if (responseData['choices'] == null ||
             responseData['choices'].isEmpty) {
           throw Exception('No choices in OpenAI response');
         }
-        
+
         final Map<String, dynamic> firstChoice = responseData['choices'][0];
         final Map<String, dynamic> message = firstChoice['message'];
         final String? content = message['content'] as String?;
-        
+
         if (content == null || content.isEmpty || content.trim() == '0') {
           throw Exception('Empty or invalid response from OpenAI');
         }
-        
+
         return content;
       } else {
         throw Exception(
@@ -533,13 +580,13 @@ class ChatController extends GetxController {
     try {
       // Extract keywords and intent from the user's message
       final String context = _extractContext(userMessage);
-      
+
       // Save the context as a system message or conversation summary
       await ChatService.updateConversationSummary(
         currentConversationId.value,
         context,
       );
-      
+
       debugPrint('Generated context: $context');
     } catch (e) {
       debugPrint('Error generating context: $e');
@@ -549,37 +596,37 @@ class ChatController extends GetxController {
   /// Extract context/intent from user message
   String _extractContext(String message) {
     final String lowerMessage = message.toLowerCase();
-    
+
     // Detect common intents and topics
-    if (lowerMessage.contains('codigo') || 
+    if (lowerMessage.contains('codigo') ||
         lowerMessage.contains('code') ||
         lowerMessage.contains('programar') ||
         lowerMessage.contains('programming')) {
       return 'programming_assistant';
     } else if (lowerMessage.contains('explica') ||
-               lowerMessage.contains('explain') ||
-               lowerMessage.contains('que es') ||
-               lowerMessage.contains('what is')) {
+        lowerMessage.contains('explain') ||
+        lowerMessage.contains('que es') ||
+        lowerMessage.contains('what is')) {
       return 'educational_explanation';
     } else if (lowerMessage.contains('ayuda') ||
-               lowerMessage.contains('help') ||
-               lowerMessage.contains('como puedo') ||
-               lowerMessage.contains('how can i')) {
+        lowerMessage.contains('help') ||
+        lowerMessage.contains('como puedo') ||
+        lowerMessage.contains('how can i')) {
       return 'support_assistant';
     } else if (lowerMessage.contains('creative') ||
-               lowerMessage.contains('creativo') ||
-               lowerMessage.contains('idea') ||
-               lowerMessage.contains('idear')) {
+        lowerMessage.contains('creativo') ||
+        lowerMessage.contains('idea') ||
+        lowerMessage.contains('idear')) {
       return 'creative_brainstorming';
     } else if (lowerMessage.contains('traducir') ||
-               lowerMessage.contains('translate') ||
-               lowerMessage.contains('idioma') ||
-               lowerMessage.contains('language')) {
+        lowerMessage.contains('translate') ||
+        lowerMessage.contains('idioma') ||
+        lowerMessage.contains('language')) {
       return 'translation_assistant';
     } else if (lowerMessage.contains('escribir') ||
-               lowerMessage.contains('write') ||
-               lowerMessage.contains('redactar') ||
-               lowerMessage.contains('composicion')) {
+        lowerMessage.contains('write') ||
+        lowerMessage.contains('redactar') ||
+        lowerMessage.contains('composicion')) {
       return 'writing_assistant';
     } else {
       return 'general_assistant';
@@ -654,33 +701,35 @@ class ChatController extends GetxController {
   Future<void> handleDocumentCreation() async {
     try {
       debugPrint('Starting document creation...');
-      
+
       // Clear current messages if any
       messages.clear();
-      
+
       // Initialize a new chat conversation for document editing
-      final ConversationLocal conversation = await ChatService.createConversation(
-        title: 'Document Editor',
-        model: 'gpt-4o-mini',
-      );
-      
+      final ConversationLocal conversation =
+          await ChatService.createConversation(
+            title: 'Document Editor',
+            model: 'gpt-4o-mini',
+          );
+
       debugPrint('Created new document conversation: ${conversation.id}');
-      
+
       // Update state
       currentConversationId.value = conversation.id;
       conversationTitle.value = conversation.title ?? 'Document Editor';
       hasMessages.value = false;
       isDocumentMode.value = true;
-      
+
       // Add a system message to guide the user
       final MessageLocal systemMessage = await ChatService.createSystemMessage(
         conversationId: currentConversationId.value,
-        text: 'I am ready to help you create and edit documents! What would you like to write or edit?',
+        text:
+            'I am ready to help you create and edit documents! What would you like to write or edit?',
       );
-      
+
       messages.add(systemMessage);
       hasMessages.value = messages.isNotEmpty;
-      
+
       debugPrint('Document creation initialized');
     } catch (e) {
       debugPrint('Error in handleDocumentCreation: $e');
@@ -693,7 +742,7 @@ class ChatController extends GetxController {
     try {
       debugPrint('Starting document generation with AI checklist...');
       isGeneratingDocument.value = true;
-      
+
       // Add user message
       final MessageLocal userMessage = await ChatService.createUserMessage(
         conversationId: currentConversationId.value,
@@ -701,49 +750,53 @@ class ChatController extends GetxController {
       );
       messages.add(userMessage);
       hasMessages.value = true;
-      
+
       // Generate checklist using AI
       isTyping.value = true;
       final String aiChecklist = await _generateDocumentChecklist(userRequest);
       isTyping.value = false;
-      
+
       // Show AI-generated checklist message
-      final MessageLocal checklistMessage = await ChatService.createAssistantMessage(
-        conversationId: currentConversationId.value,
-        text: aiChecklist,
-      );
+      final MessageLocal checklistMessage =
+          await ChatService.createAssistantMessage(
+            conversationId: currentConversationId.value,
+            text: aiChecklist,
+          );
       messages.add(checklistMessage);
-      
+
       // Scroll to show the checklist message
       _scrollToBottom();
-      
+
       // Wait longer for user to read the checklist before starting document generation
       await Future.delayed(const Duration(milliseconds: 2500));
-      
+
       // Now generate the actual document (show typing indicator)
       isTyping.value = true;
       _scrollToBottom();
-      
+
       // Generate the document content
-      final String documentContent = await _generateDocumentContent(userRequest);
+      final String documentContent = await _generateDocumentContent(
+        userRequest,
+      );
       isTyping.value = false;
-      
+
       // Wait a bit before showing completion to ensure smooth transition
       await Future.delayed(const Duration(milliseconds: 300));
-      
+
       // Show completion message only after document is fully generated
-      final MessageLocal completedMessage = await ChatService.createAssistantMessage(
-        conversationId: currentConversationId.value,
-        text: '''✅ Document generated successfully!
+      final MessageLocal completedMessage =
+          await ChatService.createAssistantMessage(
+            conversationId: currentConversationId.value,
+            text: '''✅ Document generated successfully!
 
 Your document is ready. Tap this message to open the editor and view your document.''',
-      );
+          );
       messages.add(completedMessage);
-      
+
       // Store the generated document
       generatedDocument.value = documentContent;
       documentTitle.value = _extractTitleFromRequest(userRequest);
-      
+
       // Save the document content as a special message in the database
       await ChatService.addMessage(
         conversationId: currentConversationId.value,
@@ -751,22 +804,22 @@ Your document is ready. Tap this message to open the editor and view your docume
         content: {'text': documentContent, 'type': 'document'},
         status: 'ok',
       );
-      
+
       isGeneratingDocument.value = false;
-      
+
       // Auto-scroll
       _scrollToBottom();
-      
     } catch (e) {
       debugPrint('Error generating document: $e');
       isGeneratingDocument.value = false;
       isTyping.value = false;
       _showErrorSnackbar('Error generating document');
-      
+
       // Add error message
       final MessageLocal errorMessage = await ChatService.createSystemMessage(
         conversationId: currentConversationId.value,
-        text: 'Sorry, I encountered an error while generating your document. Please try again.',
+        text:
+            'Sorry, I encountered an error while generating your document. Please try again.',
       );
       messages.add(errorMessage);
     }
@@ -781,12 +834,13 @@ Your document is ready. Tap this message to open the editor and view your docume
     final HttpClient httpClient = HttpClient();
     try {
       debugPrint('Calling OpenAI to generate document checklist...');
-      
+
       // Prepare system message for checklist generation
       final List<Map<String, String>> messages = [
         {
           'role': 'system',
-          'content': '''You are a helpful assistant that creates planning checklists for document creation.
+          'content':
+              '''You are a helpful assistant that creates planning checklists for document creation.
           
 When given a document request, create a brief checklist (4-6 items) showing the steps you'll take to create it.
 
@@ -801,10 +855,7 @@ Format your response as:
 
 Keep it concise, relevant, and focused on the specific document type requested.''',
         },
-        {
-          'role': 'user',
-          'content': userRequest,
-        },
+        {'role': 'user', 'content': userRequest},
       ];
 
       // Call OpenAI API
@@ -836,19 +887,20 @@ Keep it concise, relevant, and focused on the specific document type requested.'
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(responseBody);
-        
-        if (responseData['choices'] == null || responseData['choices'].isEmpty) {
+
+        if (responseData['choices'] == null ||
+            responseData['choices'].isEmpty) {
           throw Exception('No choices in OpenAI response');
         }
-        
+
         final Map<String, dynamic> firstChoice = responseData['choices'][0];
         final Map<String, dynamic> message = firstChoice['message'];
         final String? content = message['content'] as String?;
-        
+
         if (content == null || content.isEmpty) {
           throw Exception('Empty response from OpenAI');
         }
-        
+
         return content;
       } else {
         throw Exception(
@@ -879,12 +931,13 @@ Keep it concise, relevant, and focused on the specific document type requested.'
     final HttpClient httpClient = HttpClient();
     try {
       debugPrint('Calling OpenAI to generate document...');
-      
+
       // Prepare system message for document generation
       final List<Map<String, String>> messages = [
         {
           'role': 'system',
-          'content': '''You are a helpful document writing assistant. Create well-structured, professional documents based on user requests.
+          'content':
+              '''You are a helpful document writing assistant. Create well-structured, professional documents based on user requests.
           
 Your response should be a complete document with:
 - A clear title using ## (H2) for the main title
@@ -906,10 +959,7 @@ Use markdown formatting throughout:
 
 Make it comprehensive and ready to use with proper markdown formatting.''',
         },
-        {
-          'role': 'user',
-          'content': userRequest,
-        },
+        {'role': 'user', 'content': userRequest},
       ];
 
       // Call OpenAI API
@@ -941,19 +991,20 @@ Make it comprehensive and ready to use with proper markdown formatting.''',
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(responseBody);
-        
-        if (responseData['choices'] == null || responseData['choices'].isEmpty) {
+
+        if (responseData['choices'] == null ||
+            responseData['choices'].isEmpty) {
           throw Exception('No choices in OpenAI response');
         }
-        
+
         final Map<String, dynamic> firstChoice = responseData['choices'][0];
         final Map<String, dynamic> message = firstChoice['message'];
         final String? content = message['content'] as String?;
-        
+
         if (content == null || content.isEmpty) {
           throw Exception('Empty response from OpenAI');
         }
-        
+
         return content;
       } else {
         throw Exception(
@@ -972,7 +1023,7 @@ Make it comprehensive and ready to use with proper markdown formatting.''',
   String _extractTitleFromRequest(String request) {
     // Try to extract a meaningful title
     final String lowerRequest = request.toLowerCase();
-    
+
     if (lowerRequest.contains('resume') || lowerRequest.contains('cv')) {
       return 'My Resume';
     } else if (lowerRequest.contains('letter')) {
@@ -997,18 +1048,24 @@ Make it comprehensive and ready to use with proper markdown formatting.''',
     try {
       final String? document = generatedDocument.value;
       final String? title = documentTitle.value;
-      
+
       debugPrint('Attempting to open document editor...');
-      debugPrint('Document available: ${document != null && document.isNotEmpty}');
+      debugPrint(
+        'Document available: ${document != null && document.isNotEmpty}',
+      );
       debugPrint('Document length: ${document?.length ?? 0}');
       debugPrint('Title: $title');
-      
+
       if (document != null && document.isNotEmpty) {
-        debugPrint('Opening DocumentEditor with content length: ${document.length}');
-        Get.to(() => DocumentEditor(
-          documentTitle: title ?? 'Document',
-          documentContent: document,
-        ));
+        debugPrint(
+          'Opening DocumentEditor with content length: ${document.length}',
+        );
+        Get.to(
+          () => DocumentEditor(
+            documentTitle: title ?? 'Document',
+            documentContent: document,
+          ),
+        );
         debugPrint('Document editor opened successfully');
       } else {
         debugPrint('No document available - showing error snackbar');
@@ -1020,7 +1077,6 @@ Make it comprehensive and ready to use with proper markdown formatting.''',
       _showErrorSnackbar('Error opening document editor: $e');
     }
   }
-
 
   /// Start a new chat
   Future<void> startNewChat() async {
@@ -1059,7 +1115,7 @@ Make it comprehensive and ready to use with proper markdown formatting.''',
       isLoading.value = true;
       // IMPORTANT: Don't show typing animation when loading saved chats
       isTyping.value = false;
-      
+
       debugPrint('=== ChatController.loadConversation started ===');
       debugPrint('Conversation ID: $conversationId');
       debugPrint('isTyping set to FALSE for loading saved chat');
@@ -1079,43 +1135,59 @@ Make it comprehensive and ready to use with proper markdown formatting.''',
       debugPrint('Fetching messages from database...');
       final List<MessageLocal> conversationMessages =
           await ChatService.getMessages(conversationId);
-      
-      debugPrint('=== Database returned ${conversationMessages.length} messages ===');
-      
+
+      debugPrint(
+        '=== Database returned ${conversationMessages.length} messages ===',
+      );
+
       // Count messages by role
-      final int userCount = conversationMessages.where((m) => m.role == 'user').length;
-      final int assistantCount = conversationMessages.where((m) => m.role == 'assistant').length;
-      final int systemCount = conversationMessages.where((m) => m.role == 'system').length;
-      
+      final int userCount = conversationMessages
+          .where((m) => m.role == 'user')
+          .length;
+      final int assistantCount = conversationMessages
+          .where((m) => m.role == 'assistant')
+          .length;
+      final int systemCount = conversationMessages
+          .where((m) => m.role == 'system')
+          .length;
+
       debugPrint('Message breakdown:');
       debugPrint('  - User messages: $userCount');
       debugPrint('  - Assistant messages: $assistantCount');
       debugPrint('  - System messages: $systemCount');
-      
+
       // Log each message for debugging
       for (int i = 0; i < conversationMessages.length; i++) {
         final msg = conversationMessages[i];
         final content = msg.content;
         final text = content['text'] as String? ?? content.toString();
-        debugPrint('Message $i: role=${msg.role}, seq=${msg.seq}, id=${msg.id}');
-        debugPrint('  Content preview: ${text.length > 50 ? text.substring(0, 50) + "..." : text}');
+        debugPrint(
+          'Message $i: role=${msg.role}, seq=${msg.seq}, id=${msg.id}',
+        );
+        debugPrint(
+          '  Content preview: ${text.length > 50 ? text.substring(0, 50) + "..." : text}',
+        );
       }
 
       // Update state
       currentConversationId.value = conversationId;
       conversationTitle.value = conversation.title ?? 'Chat';
       isNewChat.value = false; // Mark as loaded chat (not new)
-      
+
       // Clear and set messages
       debugPrint('Clearing existing messages (count: ${messages.length})');
       messages.clear();
-      debugPrint('Adding ${conversationMessages.length} messages to observable list');
+      debugPrint(
+        'Adding ${conversationMessages.length} messages to observable list',
+      );
       messages.addAll(conversationMessages);
       messages.refresh(); // Force reactivity update
-      
+
       hasMessages.value = conversationMessages.isNotEmpty;
-      
-      debugPrint('=== Chat controller updated with ${messages.length} messages ===');
+
+      debugPrint(
+        '=== Chat controller updated with ${messages.length} messages ===',
+      );
       debugPrint('hasMessages.value = ${hasMessages.value}');
 
       // Check for any document messages and restore them
@@ -1131,7 +1203,7 @@ Make it comprehensive and ready to use with proper markdown formatting.''',
 
       // Scroll to bottom
       _scrollToBottom();
-      
+
       debugPrint('=== Chat loading complete ===');
     } catch (e) {
       debugPrint('Error loading conversation: $e');

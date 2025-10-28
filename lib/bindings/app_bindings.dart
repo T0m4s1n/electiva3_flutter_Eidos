@@ -4,12 +4,14 @@ import '../controllers/navigation_controller.dart';
 import '../controllers/app_controller.dart';
 import '../controllers/chat_controller.dart';
 import '../controllers/theme_controller.dart';
+import '../controllers/preferences_controller.dart';
 
 class InitialBinding extends Bindings {
   @override
   void dependencies() {
     // Register controllers as singletons
     Get.put<ThemeController>(ThemeController(), permanent: true);
+    Get.put<PreferencesController>(PreferencesController(), permanent: true);
     Get.put<AuthController>(AuthController(), permanent: true);
     Get.put<NavigationController>(NavigationController(), permanent: true);
     Get.put<AppController>(AppController(), permanent: true);
@@ -39,5 +41,13 @@ class ChatBinding extends Bindings {
   void dependencies() {
     // Ensure ChatController is available for chat page
     Get.lazyPut<ChatController>(() => ChatController());
+  }
+}
+
+class PreferencesBinding extends Bindings {
+  @override
+  void dependencies() {
+    // Ensure PreferencesController is available for preferences page
+    Get.lazyPut<PreferencesController>(() => PreferencesController());
   }
 }

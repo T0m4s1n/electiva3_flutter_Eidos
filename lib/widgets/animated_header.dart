@@ -12,6 +12,7 @@ class AnimatedHeader extends StatefulWidget {
   final String? userAvatarUrl;
   final VoidCallback? onLogout;
   final VoidCallback? onEditProfile;
+  final VoidCallback? onPreferences;
   final ValueChanged<bool>? onMenuStateChanged;
 
   const AnimatedHeader({
@@ -24,6 +25,7 @@ class AnimatedHeader extends StatefulWidget {
     this.userAvatarUrl,
     this.onLogout,
     this.onEditProfile,
+    this.onPreferences,
     this.onMenuStateChanged,
   });
 
@@ -102,7 +104,7 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
       _menuController.reverse();
       _slideController.reverse();
     }
-    
+
     // Notify parent about menu state change
     widget.onMenuStateChanged?.call(_isMenuOpen);
   }
@@ -114,7 +116,7 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
       });
       _menuController.reverse();
       _slideController.reverse();
-      
+
       // Notify parent about menu state change
       widget.onMenuStateChanged?.call(false);
     }
@@ -145,363 +147,420 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
             ],
           ),
           child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Main header bar
-          Container(
-            height: 60,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                // Hamburger menu button
-                  GestureDetector(
-                  onTap: _toggleMenu,
-                  child: AnimatedBuilder(
-                    animation: Listenable.merge([
-                      _menuAnimation,
-                      _scaleAnimation,
-                      _colorAnimation,
-                    ]),
-                    builder: (context, child) {
-                      return Transform.scale(
-                        scale: _scaleAnimation.value,
-                        child: Transform.rotate(
-                          angle: _menuAnimation.value * 2 * 3.14159,
-                          child: Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).brightness == Brightness.dark
-                                  ? Colors.grey[800]
-                                  : _colorAnimation.value,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Theme.of(context).brightness == Brightness.dark
-                                    ? Colors.grey[600]!
-                                    : Colors.black87,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 200),
-                              child: Icon(
-                                _isMenuOpen ? Icons.close : Icons.menu,
-                                key: ValueKey(_isMenuOpen),
-                                color: Theme.of(context).iconTheme.color,
-                                size: 20,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-
-                const SizedBox(width: 20),
-
-                // App logo with dynamiccube icon
-                Container(
-                  width: 32,
-                  height: 32,
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? Colors.white.withOpacity(0.1)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Lottie.asset(
-                    'assets/fonts/svgs/dynamiccube.json',
-                    fit: BoxFit.contain,
-                    repeat: true,
-                  ),
-                ),
-
-                const Spacer(),
-
-                // New chat button
-                GestureDetector(
-                  onTap: widget.onCreateChat,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.grey[800]
-                          : Colors.grey[100],
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.grey[600]!
-                            : Colors.black87,
-                      ),
-                    ),
-                    child: Icon(
-                      Icons.add,
-                      color: Theme.of(context).iconTheme.color,
-                      size: 20,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(width: 12),
-
-                // Theme toggle button
-                _buildThemeToggle(),
-
-                const SizedBox(width: 12),
-
-                // User avatar or login button
-                widget.isLoggedIn
-                    ? GestureDetector(
-                        onTap: _toggleMenu,
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.black87),
-                          ),
-                          child:
-                              widget.userAvatarUrl != null &&
-                                  widget.userAvatarUrl!.isNotEmpty
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: Image.network(
-                                    widget.userAvatarUrl!,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return widget.userName.isNotEmpty
-                                          ? Center(
-                                              child: Text(
-                                                widget.userName[0]
-                                                    .toUpperCase(),
-                                                style: const TextStyle(
-                                                  fontFamily: 'Poppins',
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.black87,
-                                                ),
-                                              ),
-                                            )
-                                          : const Icon(
-                                              Icons.person_outline,
-                                              color: Colors.grey,
-                                              size: 18,
-                                            );
-                                    },
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Main header bar
+              Container(
+                height: 60,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    // Hamburger menu button
+                    GestureDetector(
+                      onTap: _toggleMenu,
+                      child: AnimatedBuilder(
+                        animation: Listenable.merge([
+                          _menuAnimation,
+                          _scaleAnimation,
+                          _colorAnimation,
+                        ]),
+                        builder: (context, child) {
+                          return Transform.scale(
+                            scale: _scaleAnimation.value,
+                            child: Transform.rotate(
+                              angle: _menuAnimation.value * 2 * 3.14159,
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color:
+                                      Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Colors.grey[800]
+                                      : _colorAnimation.value,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color:
+                                        Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? Colors.grey[600]!
+                                        : Colors.black87,
                                   ),
-                                )
-                              : widget.userName.isNotEmpty
-                              ? Center(
-                                  child: Text(
-                                    widget.userName[0].toUpperCase(),
-                                    style: const TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.person_outline,
-                                  color: Colors.grey,
-                                  size: 18,
-                                ),
-                        ),
-                      )
-                    : GestureDetector(
-                        onTap: widget.onLogin,
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? Colors.grey[800]
-                                : Colors.grey[200],
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: Theme.of(context).brightness == Brightness.dark
-                                  ? Colors.grey[600]!
-                                  : Colors.black87,
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.person_outline,
-                            color: Theme.of(context).iconTheme.color,
-                            size: 18,
-                          ),
-                        ),
-                      ),
-              ],
-            ),
-          ),
-
-          // Animated dropdown menu
-          AnimatedBuilder(
-            animation: _slideAnimation,
-            builder: (context, child) {
-              return ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(20),
-                  bottomRight: Radius.circular(20),
-                ),
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  heightFactor: _slideAnimation.value,
-                  child: Container(
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? const Color(0xFF1A1A1A)
-                          : Colors.grey[50],
-                      border: Border(
-                        top: BorderSide(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.grey[600]!
-                              : Colors.black87,
-                          width: 1,
-                        ),
-                      ),
-                    ),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: MediaQuery.of(context).size.height * 0.6,
-                      ),
-                      child: SingleChildScrollView(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Account section
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Text(
-                                    'Account',
-                                    style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: Theme.of(context).colorScheme.onSurface,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-
-                                  if (widget.isLoggedIn) ...[
-                                    // User info
-                                    Container(
-                                      padding: const EdgeInsets.all(16),
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context).brightness == Brightness.dark
-                                            ? const Color(0xFF2C2C2C)
-                                            : Colors.white,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: Theme.of(context).brightness == Brightness.dark
-                                              ? Colors.grey[600]!
-                                              : Colors.black87,
-                                        ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.1,
                                       ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            widget.userName.isNotEmpty
-                                                ? widget.userName
-                                                : 'User',
-                                            style: TextStyle(
-                                              fontFamily: 'Poppins',
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                              color: Theme.of(context).colorScheme.onSurface,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            widget.userEmail,
-                                            style: TextStyle(
-                                              fontFamily: 'Poppins',
-                                              fontSize: 14,
-                                              color: Theme.of(context).brightness == Brightness.dark
-                                                  ? Colors.grey[400]
-                                                  : Colors.grey[600],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-
-                                    // Edit profile button
-                                    _buildSkeletonButton(
-                                      icon: Icons.edit_outlined,
-                                      text: 'Edit Profile',
-                                      onTap: () {
-                                        _closeMenu();
-                                        Future.delayed(const Duration(milliseconds: 150), () {
-                                          widget.onEditProfile?.call();
-                                        });
-                                      },
-                                    ),
-
-                                    const SizedBox(height: 12),
-
-                                    // Logout button
-                                    _buildSkeletonButton(
-                                      icon: Icons.logout,
-                                      text: 'Log Out',
-                                      onTap: () {
-                                        _closeMenu();
-                                        Future.delayed(const Duration(milliseconds: 150), () {
-                                          widget.onLogout?.call();
-                                        });
-                                      },
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
                                     ),
                                   ],
+                                ),
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 200),
+                                  child: Icon(
+                                    _isMenuOpen ? Icons.close : Icons.menu,
+                                    key: ValueKey(_isMenuOpen),
+                                    color: Theme.of(context).iconTheme.color,
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(width: 20),
+
+                    // App logo with dynamiccube icon
+                    Container(
+                      width: 32,
+                      height: 32,
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white.withOpacity(0.1)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Lottie.asset(
+                        'assets/fonts/svgs/dynamiccube.json',
+                        fit: BoxFit.contain,
+                        repeat: true,
+                      ),
+                    ),
+
+                    const Spacer(),
+
+                    // New chat button
+                    GestureDetector(
+                      onTap: widget.onCreateChat,
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.grey[800]
+                              : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? Colors.grey[600]!
+                                : Colors.black87,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.add,
+                          color: Theme.of(context).iconTheme.color,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 12),
+
+                    // Theme toggle button
+                    _buildThemeToggle(),
+
+                    const SizedBox(width: 12),
+
+                    // User avatar or login button
+                    widget.isLoggedIn
+                        ? GestureDetector(
+                            onTap: _toggleMenu,
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[200],
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.black87),
+                              ),
+                              child:
+                                  widget.userAvatarUrl != null &&
+                                      widget.userAvatarUrl!.isNotEmpty
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(20),
+                                      child: Image.network(
+                                        widget.userAvatarUrl!,
+                                        fit: BoxFit.cover,
+                                        errorBuilder:
+                                            (context, error, stackTrace) {
+                                              return widget.userName.isNotEmpty
+                                                  ? Center(
+                                                      child: Text(
+                                                        widget.userName[0]
+                                                            .toUpperCase(),
+                                                        style: const TextStyle(
+                                                          fontFamily: 'Poppins',
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color: Colors.black87,
+                                                        ),
+                                                      ),
+                                                    )
+                                                  : const Icon(
+                                                      Icons.person_outline,
+                                                      color: Colors.grey,
+                                                      size: 18,
+                                                    );
+                                            },
+                                      ),
+                                    )
+                                  : widget.userName.isNotEmpty
+                                  ? Center(
+                                      child: Text(
+                                        widget.userName[0].toUpperCase(),
+                                        style: const TextStyle(
+                                          fontFamily: 'Poppins',
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.person_outline,
+                                      color: Colors.grey,
+                                      size: 18,
+                                    ),
+                            ),
+                          )
+                        : GestureDetector(
+                            onTap: widget.onLogin,
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Colors.grey[800]
+                                    : Colors.grey[200],
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color:
+                                      Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Colors.grey[600]!
+                                      : Colors.black87,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.person_outline,
+                                color: Theme.of(context).iconTheme.color,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                  ],
+                ),
+              ),
+
+              // Animated dropdown menu
+              AnimatedBuilder(
+                animation: _slideAnimation,
+                builder: (context, child) {
+                  return ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(20),
+                      bottomRight: Radius.circular(20),
+                    ),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      heightFactor: _slideAnimation.value,
+                      child: Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? const Color(0xFF1A1A1A)
+                              : Colors.grey[50],
+                          border: Border(
+                            top: BorderSide(
+                              color:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Colors.grey[600]!
+                                  : Colors.black87,
+                              width: 1,
+                            ),
+                          ),
+                        ),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: MediaQuery.of(context).size.height * 0.6,
+                          ),
+                          child: SingleChildScrollView(
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Account section
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Text(
+                                        'Account',
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurface,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+
+                                      if (widget.isLoggedIn) ...[
+                                        // User info
+                                        Container(
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(
+                                            color:
+                                                Theme.of(context).brightness ==
+                                                    Brightness.dark
+                                                ? const Color(0xFF2C2C2C)
+                                                : Colors.white,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            border: Border.all(
+                                              color:
+                                                  Theme.of(
+                                                        context,
+                                                      ).brightness ==
+                                                      Brightness.dark
+                                                  ? Colors.grey[600]!
+                                                  : Colors.black87,
+                                            ),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                widget.userName.isNotEmpty
+                                                    ? widget.userName
+                                                    : 'User',
+                                                style: TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).colorScheme.onSurface,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                widget.userEmail,
+                                                style: TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 14,
+                                                  color:
+                                                      Theme.of(
+                                                            context,
+                                                          ).brightness ==
+                                                          Brightness.dark
+                                                      ? Colors.grey[400]
+                                                      : Colors.grey[600],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+
+                                        // Edit profile button
+                                        _buildSkeletonButton(
+                                          icon: Icons.edit_outlined,
+                                          text: 'Edit Profile',
+                                          onTap: () {
+                                            _closeMenu();
+                                            Future.delayed(
+                                              const Duration(milliseconds: 150),
+                                              () {
+                                                widget.onEditProfile?.call();
+                                              },
+                                            );
+                                          },
+                                        ),
+
+                                        const SizedBox(height: 12),
+
+                                        // Preferences button
+                                        _buildSkeletonButton(
+                                          icon: Icons.settings_outlined,
+                                          text: 'Preferencias',
+                                          onTap: () {
+                                            _closeMenu();
+                                            Future.delayed(
+                                              const Duration(milliseconds: 150),
+                                              () {
+                                                widget.onPreferences?.call();
+                                              },
+                                            );
+                                          },
+                                        ),
+
+                                        const SizedBox(height: 12),
+
+                                        // Logout button
+                                        _buildSkeletonButton(
+                                          icon: Icons.logout,
+                                          text: 'Log Out',
+                                          onTap: () {
+                                            _closeMenu();
+                                            Future.delayed(
+                                              const Duration(milliseconds: 150),
+                                              () {
+                                                widget.onLogout?.call();
+                                              },
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+
+                                  const SizedBox(height: 24),
+
+                                  // Create new chat button
+                                  _buildSkeletonButton(
+                                    icon: Icons.add_circle_outline,
+                                    text: 'Create New Chat',
+                                    onTap: () {
+                                      // Close menu first
+                                      _closeMenu();
+                                      // Call create chat after a small delay to let menu close
+                                      Future.delayed(
+                                        const Duration(milliseconds: 150),
+                                        () {
+                                          widget.onCreateChat?.call();
+                                        },
+                                      );
+                                    },
+                                    isPrimary: true,
+                                  ),
                                 ],
                               ),
-
-                              const SizedBox(height: 24),
-
-                              // Create new chat button
-                              _buildSkeletonButton(
-                                icon: Icons.add_circle_outline,
-                                text: 'Create New Chat',
-                                onTap: () {
-                                  // Close menu first
-                                  _closeMenu();
-                                  // Call create chat after a small delay to let menu close
-                                  Future.delayed(const Duration(milliseconds: 150), () {
-                                    widget.onCreateChat?.call();
-                                  });
-                                },
-                                isPrimary: true,
-                              ),
-
-                            ],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-              );
-            },
+                  );
+                },
+              ),
+            ],
           ),
-        ],
-      ),
         ),
       ],
     );
@@ -514,14 +573,14 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
     bool isPrimary = false,
   }) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
         decoration: BoxDecoration(
-          color: isPrimary 
+          color: isPrimary
               ? (isDark ? Colors.white : Colors.black87)
               : (isDark ? const Color(0xFF2C2C2C) : Colors.white),
           borderRadius: BorderRadius.circular(16),
@@ -541,7 +600,7 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
           children: [
             Icon(
               icon,
-              color: isPrimary 
+              color: isPrimary
                   ? (isDark ? Colors.black87 : Colors.white)
                   : (isDark ? Colors.white : Colors.black87),
               size: 20,
@@ -553,7 +612,7 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                 fontFamily: 'Poppins',
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
-                color: isPrimary 
+                color: isPrimary
                     ? (isDark ? Colors.black87 : Colors.white)
                     : (isDark ? Colors.white : Colors.black87),
               ),
@@ -566,46 +625,45 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
 
   Widget _buildThemeToggle() {
     final ThemeController themeController = Get.find<ThemeController>();
-    
-    return Obx(() => GestureDetector(
-      onTap: () => themeController.toggleTheme(),
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: Theme.of(context).brightness == Brightness.dark 
-              ? Colors.grey[800]
-              : Colors.grey[100],
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
+
+    return Obx(
+      () => GestureDetector(
+        onTap: () => themeController.toggleTheme(),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
             color: Theme.of(context).brightness == Brightness.dark
-                ? Colors.grey[600]!
-                : Colors.black87,
+                ? Colors.grey[800]
+                : Colors.grey[100],
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.grey[600]!
+                  : Colors.black87,
+            ),
           ),
-        ),
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          transitionBuilder: (child, animation) {
-            return RotationTransition(
-              turns: animation,
-              child: FadeTransition(
-                opacity: animation,
-                child: child,
-              ),
-            );
-          },
-          child: Icon(
-            themeController.isDarkMode.value 
-                ? Icons.light_mode_outlined 
-                : Icons.dark_mode_outlined,
-            key: ValueKey(themeController.isDarkMode.value),
-            color: Theme.of(context).brightness == Brightness.dark
-                ? Colors.amber[300]
-                : Colors.black87,
-            size: 20,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            transitionBuilder: (child, animation) {
+              return RotationTransition(
+                turns: animation,
+                child: FadeTransition(opacity: animation, child: child),
+              );
+            },
+            child: Icon(
+              themeController.isDarkMode.value
+                  ? Icons.light_mode_outlined
+                  : Icons.dark_mode_outlined,
+              key: ValueKey(themeController.isDarkMode.value),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.amber[300]
+                  : Colors.black87,
+              size: 20,
+            ),
           ),
         ),
       ),
-    ));
+    );
   }
 }

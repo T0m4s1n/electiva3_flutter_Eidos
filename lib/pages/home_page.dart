@@ -12,6 +12,7 @@ import 'auth_page.dart';
 import 'edit_profile_page.dart';
 import 'chat_page.dart';
 import 'onboarding_page.dart';
+import '../routes/app_routes.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -75,12 +76,14 @@ class _HomePageState extends State<HomePage> {
                       isLoggedIn: authController.isLoggedIn.value,
                       userName: authController.userName.value,
                       userEmail: authController.userEmail.value,
-                      userAvatarUrl: authController.userAvatarUrl.value.isNotEmpty
+                      userAvatarUrl:
+                          authController.userAvatarUrl.value.isNotEmpty
                           ? authController.userAvatarUrl.value
                           : null,
                       onLogin: () => authController.signOut(),
                       onLogout: () => authController.signOut(),
                       onEditProfile: () => navController.showEditProfileView(),
+                      onPreferences: () => Get.toNamed(AppRoutes.preferences),
                       onCreateChat: () async {
                         final chatController = Get.find<ChatController>();
                         await chatController.startNewChat();
@@ -106,7 +109,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
-              
+
               // Transparent overlay to close header menu when tapping outside
               // Position it below the header (starting from ~80px down)
               if (_isHeaderMenuOpen)
@@ -121,12 +124,10 @@ class _HomePageState extends State<HomePage> {
                         _isHeaderMenuOpen = false;
                       });
                     },
-                    child: Container(
-                      color: Colors.transparent,
-                    ),
+                    child: Container(color: Colors.transparent),
                   ),
                 ),
-              
+
               // Loading overlay
               Obx(() {
                 if (navController.showLoadingOverlay.value) {
@@ -154,7 +155,9 @@ class _HomePageState extends State<HomePage> {
                                 style: TextStyle(
                                   fontFamily: 'Poppins',
                                   fontSize: 16,
-                                  color: Theme.of(context).colorScheme.onSurface,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
                                 ),
                               ),
                             ],
