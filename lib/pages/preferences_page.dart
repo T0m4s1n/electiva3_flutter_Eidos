@@ -400,10 +400,23 @@ class PreferencesPage extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[800]
+                        : Colors.grey[100],
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.grey[600]!
+                          : Colors.black87,
+                    ),
                   ),
-                  child: Icon(Icons.add, color: Colors.white, size: 16),
+                  child: Icon(
+                    Icons.add,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black87,
+                    size: 16,
+                  ),
                 ),
               ),
             ],
@@ -656,9 +669,17 @@ class PreferencesPage extends StatelessWidget {
                   Navigator.of(context).pop();
                 }
               },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+              ),
               child: Text(
                 'Agregar',
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.black87
+                      : Colors.white,
+                ),
               ),
             ),
           ],
@@ -762,9 +783,17 @@ class PreferencesPage extends StatelessWidget {
                   Navigator.of(context).pop();
                 }
               },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+              ),
               child: Text(
                 'Guardar',
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.black87
+                      : Colors.white,
+                ),
               ),
             ),
           ],
