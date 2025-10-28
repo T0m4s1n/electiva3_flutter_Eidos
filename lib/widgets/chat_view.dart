@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:get/get.dart';
 import '../controllers/chat_controller.dart';
+import '../models/chat_models.dart';
 import 'message_widgets.dart';
+import 'animated_icon_background.dart';
 
 class ChatView extends StatefulWidget {
   final VoidCallback? onBack;
@@ -18,6 +20,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
   late ChatController chatController;
+  int _initialMessageCount = 0;
 
   @override
   void initState() {
@@ -25,6 +28,9 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
     // Get chat controller
     chatController = Get.find<ChatController>();
+
+    // Track initial message count (messages that were loaded, not generated now)
+    _initialMessageCount = chatController.messages.length;
 
     // Initialize chat if no conversation is active
     if (chatController.currentConversationId.value.isEmpty) {
@@ -61,30 +67,46 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     return FadeTransition(
       opacity: _fadeAnimation,
       child: Container(
-        color: Colors.white,
-        child: Column(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: Stack(
           children: [
-            // Header with back button and title
-            _buildHeader(),
+            // Animated background - only show for new chats
+            Obx(() {
+              if (chatController.isNewChat.value) {
+                return const Positioned.fill(
+                  child: ChatIconBackground(),
+                );
+              }
+              return const SizedBox.shrink();
+            }),
+            
+            // Main content
+            Column(
+              children: [
+                // Header with back button and title
+                _buildHeader(),
 
-            // Main chat content
-            Expanded(
-              child: Obx(() {
-                if (chatController.hasMessages.value) {
-                  return _buildChatMessages();
-                } else {
-                  return _buildEmptyState();
-                }
-              }),
-            ),
+                // Main chat content
+                Expanded(
+                  child: Obx(() {
+                    if (chatController.hasMessages.value) {
+                      return _buildChatMessages();
+                    } else {
+                      // Show new chat view for any chat without messages
+                      return _buildEmptyState();
+                    }
+                  }),
+                ),
 
-            // Chat input
-            Obx(
-              () => ChatInput(
-                controller: chatController.messageController,
-                onSend: chatController.sendMessage,
-                isLoading: chatController.isLoading.value,
-              ),
+                // Chat input
+                Obx(
+                  () => ChatInput(
+                    controller: chatController.messageController,
+                    onSend: chatController.sendMessage,
+                    isLoading: chatController.isLoading.value,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -93,11 +115,17 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   }
 
   Widget _buildHeader() {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+        color: Theme.of(context).cardTheme.color,
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+          ),
+        ),
       ),
       child: Row(
         children: [
@@ -107,43 +135,17 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: Colors.grey[100],
+                color: isDark ? Colors.grey[800] : Colors.grey[100],
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.black87),
-              ),
-              child: const Icon(
-                Icons.arrow_back,
-                color: Colors.black87,
-                size: 20,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Obx(
-              () => Text(
-                chatController.conversationTitle.value,
-                style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                border: Border.all(
+                  color: isDark ? Colors.grey[600]! : Colors.black87,
                 ),
               ),
-            ),
-          ),
-          // New chat button
-          GestureDetector(
-            onTap: chatController.startNewChat,
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.black87),
+              child: Icon(
+                Icons.arrow_back,
+                color: Theme.of(context).iconTheme.color,
+                size: 20,
               ),
-              child: const Icon(Icons.add, color: Colors.black87, size: 20),
             ),
           ),
         ],
@@ -153,18 +155,47 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
   Widget _buildChatMessages() {
     return Obx(() {
+      // Filter out document-type messages from display
+      final List<MessageLocal> displayMessages = chatController.messages
+          .where((msg) {
+            final Map<String, dynamic> content = msg.content;
+            return content['type'] != 'document';
+          })
+          .toList();
+      
       return ListView.builder(
         controller: chatController.scrollController,
         padding: const EdgeInsets.symmetric(vertical: 16),
         itemCount:
-            chatController.messages.length +
+            displayMessages.length +
             (chatController.isTyping.value ? 1 : 0),
         itemBuilder: (context, index) {
-          if (index < chatController.messages.length) {
-            final message = chatController.messages[index];
+          if (index < displayMessages.length) {
+            final message = displayMessages[index];
+            
+            // Check if this is a completion message with document ready
+            final String messageText = _getMessageText(message);
+            final bool isDocumentReady = messageText.contains('Document generated successfully') ||
+                                        messageText.contains('Your document is ready');
+            
+            // Only animate messages that were added AFTER initial load
+            // Messages at index < _initialMessageCount were loaded from database
+            final bool isNewMessage = index >= _initialMessageCount;
+            final bool isLastMessage = index == displayMessages.length - 1;
+            
+            // Only animate if: 
+            // 1. Message was added in this session (not loaded)
+            // 2. It's the last message
+            // 3. It's an assistant message
+            final bool shouldAnimate = isNewMessage && 
+                                      isLastMessage && 
+                                      message.role == 'assistant';
+            
             return MessageBubble(
               message: message,
               isUser: message.role == 'user',
+              animateTyping: shouldAnimate,
+              onTap: isDocumentReady ? chatController.openDocumentEditor : null,
             );
           } else {
             return const TypingIndicator();
@@ -174,25 +205,33 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     });
   }
 
+  String _getMessageText(MessageLocal message) {
+    final dynamic content = message.content;
+    if (content is Map<String, dynamic>) {
+      return content['text'] as String? ?? content.toString();
+    }
+    return content.toString();
+  }
+
   Widget _buildEmptyState() {
-    return SingleChildScrollView(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          minHeight: MediaQuery.of(context).size.height - 200,
-        ),
-        child: IntrinsicHeight(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 20),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
 
                 // Idea animation (plays in loop)
                 Center(
-                  child: SizedBox(
+                  child: Container(
                     width: 200,
                     height: 200,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white.withOpacity(0.25)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
                     child: Lottie.asset(
                       'assets/fonts/svgs/idea.json',
                       controller: _ideaController,
@@ -210,14 +249,14 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                 const SizedBox(height: 30),
 
                 // Welcome message
-                const Center(
+                Center(
                   child: Text(
                     'Welcome to your new chat!',
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -225,13 +264,15 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
                 const SizedBox(height: 16),
 
-                const Center(
+                Center(
                   child: Text(
                     'Start typing your message below to begin our conversation',
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 16,
-                      color: Colors.grey,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.grey[400]
+                          : Colors.grey,
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -239,71 +280,95 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
 
                 const SizedBox(height: 40),
 
-                // Quick actions
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    Expanded(
-                      child: _buildQuickAction(
-                        icon: Icons.lightbulb_outline,
-                        text: 'Ideas',
-                        onTap: () => chatController.handleQuickAction('Ideas'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildQuickAction(
-                        icon: Icons.code,
-                        text: 'Code',
-                        onTap: () => chatController.handleQuickAction('Code'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildQuickAction(
-                        icon: Icons.description_outlined,
-                        text: 'Write',
-                        onTap: () => chatController.handleQuickAction('Write'),
-                      ),
-                    ),
-                  ],
-                ),
+                // Create Document button
+                _buildDocumentButton(),
 
-                const SizedBox(height: 20),
-              ],
-            ),
-          ),
-        ),
+                const SizedBox(height: 40),
+        ],
       ),
     );
   }
 
-  Widget _buildQuickAction({
-    required IconData icon,
-    required String text,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildDocumentButton() {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return GestureDetector(
-      onTap: onTap,
+      onTap: () => chatController.handleDocumentCreation(),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.black87),
+          color: isDark ? const Color(0xFF1E1E1E) : Colors.grey[50],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isDark ? Colors.grey[600]! : Colors.black87,
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: Row(
           children: [
-            Icon(icon, color: Colors.black87, size: 24),
-            const SizedBox(height: 8),
-            Text(
-              text,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: Colors.black87,
+            // Creating Animation
+            Container(
+              width: 80,
+              height: 80,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white.withOpacity(0.1)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Lottie.asset(
+                'assets/fonts/svgs/creating.json',
+                fit: BoxFit.contain,
+                repeat: true,
+              ),
+            ),
+            const SizedBox(width: 20),
+            // Text content
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Create Document',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Get AI-powered help to write and edit documents',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Arrow icon
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white : Colors.black87,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.arrow_forward,
+                color: isDark ? Colors.black87 : Colors.white,
+                size: 20,
               ),
             ),
           ],
@@ -311,4 +376,5 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       ),
     );
   }
+
 }

@@ -59,8 +59,10 @@ class _LoadingScreenState extends State<LoadingScreen>
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Center(
         child: FadeTransition(
           opacity: _fadeAnimation,
@@ -68,9 +70,16 @@ class _LoadingScreenState extends State<LoadingScreen>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               // Quad cube animation
-              SizedBox(
+              Container(
                 width: 200,
                 height: 200,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.1)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(100),
+                ),
                 child: Lottie.asset(
                   'assets/fonts/svgs/quadcube.json',
                   fit: BoxFit.contain,
@@ -84,11 +93,11 @@ class _LoadingScreenState extends State<LoadingScreen>
               if (widget.showMessage)
                 Text(
                   widget.message ?? 'Loading...',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 18,
                     fontWeight: FontWeight.w500,
-                    color: Colors.black87,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                   textAlign: TextAlign.center,
                 ),

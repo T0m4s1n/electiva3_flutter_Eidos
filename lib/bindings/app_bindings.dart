@@ -3,11 +3,13 @@ import '../controllers/auth_controller.dart';
 import '../controllers/navigation_controller.dart';
 import '../controllers/app_controller.dart';
 import '../controllers/chat_controller.dart';
+import '../controllers/theme_controller.dart';
 
 class InitialBinding extends Bindings {
   @override
   void dependencies() {
     // Register controllers as singletons
+    Get.put<ThemeController>(ThemeController(), permanent: true);
     Get.put<AuthController>(AuthController(), permanent: true);
     Get.put<NavigationController>(NavigationController(), permanent: true);
     Get.put<AppController>(AppController(), permanent: true);

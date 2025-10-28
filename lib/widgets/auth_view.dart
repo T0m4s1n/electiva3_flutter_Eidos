@@ -77,13 +77,20 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _fadeAnimation,
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        body: _showSuccessAnimation
+        child: Scaffold(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          body: _showSuccessAnimation
             ? Center(
-                child: SizedBox(
+                child: Container(
                   width: 200,
                   height: 200,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white.withOpacity(0.1)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
                   child: Lottie.asset(
                     'assets/fonts/svgs/check.json',
                     fit: BoxFit.contain,

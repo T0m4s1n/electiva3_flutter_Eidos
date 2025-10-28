@@ -5,6 +5,8 @@ import '../controllers/chat_controller.dart';
 import '../controllers/navigation_controller.dart';
 import '../models/chat_models.dart';
 import '../services/chat_service.dart';
+import '../services/chat_database.dart';
+import 'animated_icon_background.dart';
 
 class ConversationsList extends StatefulWidget {
   const ConversationsList({super.key});
@@ -14,7 +16,7 @@ class ConversationsList extends StatefulWidget {
 }
 
 class _ConversationsListState extends State<ConversationsList>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final ChatController chatController = Get.find<ChatController>();
   final NavigationController navController = Get.find<NavigationController>();
   final RxList<ConversationLocal> conversations = <ConversationLocal>[].obs;
@@ -25,25 +27,63 @@ class _ConversationsListState extends State<ConversationsList>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    _loadConversations();
+    // Initialize database and load conversations
+    _initializeAndLoad();
+  }
+
+  Future<void> _initializeAndLoad() async {
+    try {
+      // Initialize the database first
+      await ChatDatabase.instance;
+      debugPrint('Database initialized successfully');
+      
+      // Load conversations
+      await _loadConversations();
+    } catch (e) {
+      debugPrint('Error initializing database: $e');
+      isLoading.value = false;
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _animationController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Reload conversations when app comes back to foreground
+      _loadConversations();
+    }
   }
 
   Future<void> _loadConversations() async {
     try {
       isLoading.value = true;
+      debugPrint('Loading conversations from database...');
       final List<ConversationLocal> convs =
           await ChatService.getConversations();
-      conversations.value = convs;
+      
+      debugPrint('Fetched ${convs.length} conversations from database');
+      
+      // Clear the list first to ensure UI updates
+      conversations.clear();
+      
+      // Add the new conversations
+      conversations.addAll(convs);
+      
+      debugPrint('Updated conversations list. Current count: ${conversations.length}');
+      
+      // Force UI update by reassigning
+      conversations.refresh();
     } catch (e) {
       debugPrint('Error loading conversations: $e');
     } finally {
@@ -74,47 +114,64 @@ class _ConversationsListState extends State<ConversationsList>
 
   Future<void> _deleteConversation(String conversationId) async {
     try {
-      debugPrint('Deleting conversation: $conversationId');
+      debugPrint('=== Starting delete process for conversation: $conversationId ===');
       
       // Check if this is the currently active conversation
       final bool isCurrentConversation = 
           chatController.currentConversationId.value == conversationId;
+      debugPrint('Is current conversation: $isCurrentConversation');
       
       // Add to deleting set and trigger animation
       setState(() {
         _deletingIds.add(conversationId);
       });
+      debugPrint('Added to deleting set');
       
       // Wait for animation to complete
       await Future.delayed(const Duration(milliseconds: 300));
       
-      // Delete from database
+      // Delete from database using local storage
+      debugPrint('Calling ChatService.deleteConversation');
       await ChatService.deleteConversation(conversationId);
-      debugPrint('Conversation deleted from database');
+      debugPrint('Successfully deleted conversation from database');
       
       // Remove from deleting set
       setState(() {
         _deletingIds.remove(conversationId);
       });
+      debugPrint('Removed from deleting set');
       
-      // Reload the conversations list
+      // Wait a bit to ensure database transaction is complete
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      // Reload the conversations list from local storage
+      debugPrint('Reloading conversations list');
       await _loadConversations();
+      debugPrint('Conversations list reloaded. Current count: ${conversations.length}');
       
       // If this was the current conversation, clear the controller state and hide chat
       if (isCurrentConversation) {
+        debugPrint('Clearing current conversation from controller');
         chatController.messages.clear();
         chatController.currentConversationId.value = '';
         chatController.conversationTitle.value = 'New Chat';
         chatController.hasMessages.value = false;
+        
+        // Hide chat view to show the conversations list
         navController.hideChat();
-        debugPrint('Cleared current conversation state');
+        debugPrint('Cleared current conversation state and hid chat');
       }
-    } catch (e) {
-      debugPrint('Error deleting conversation: $e');
+      
+      debugPrint('=== Delete process completed successfully ===');
+    } catch (e, stackTrace) {
+      debugPrint('=== Error deleting conversation: $e ===');
+      debugPrint('Stack trace: $stackTrace');
+      
       // Remove from deleting set on error
       setState(() {
         _deletingIds.remove(conversationId);
       });
+      
       // Show error to user
       Get.snackbar(
         'Error',
@@ -129,34 +186,50 @@ class _ConversationsListState extends State<ConversationsList>
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      if (isLoading.value) {
-        return const Center(child: CircularProgressIndicator());
-      }
-
-      if (conversations.isEmpty) {
-        return _buildEmptyState();
-      }
-
-      return ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: conversations.length,
-        itemBuilder: (context, index) {
-          final conversation = conversations[index];
-          return _buildConversationCard(conversation);
-        },
+      return Stack(
+        children: [
+          // Animated background
+          const Positioned.fill(
+            child: DocumentIconBackground(),
+          ),
+          
+          // Main content
+          if (isLoading.value)
+            const Center(child: CircularProgressIndicator())
+          else if (conversations.isEmpty)
+            _buildEmptyState()
+          else
+            ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: conversations.length,
+              itemBuilder: (context, index) {
+                final conversation = conversations[index];
+                return _buildConversationCard(conversation);
+              },
+            ),
+        ],
       );
     });
   }
 
   Widget _buildEmptyState() {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Documents.json SVG from Lottie
-          SizedBox(
+          Container(
             width: 200,
             height: 200,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white.withOpacity(0.1)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(100),
+            ),
             child: Lottie.asset(
               'assets/fonts/svgs/documents.json',
               fit: BoxFit.contain,
@@ -168,7 +241,7 @@ class _ConversationsListState extends State<ConversationsList>
             style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 18,
-              color: Colors.grey[600],
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
             ),
           ),
           const SizedBox(height: 8),
@@ -177,7 +250,7 @@ class _ConversationsListState extends State<ConversationsList>
             style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 14,
-              color: Colors.grey[500],
+              color: isDark ? Colors.grey[500] : Colors.grey[500],
             ),
           ),
           const SizedBox(height: 24),
@@ -186,17 +259,19 @@ class _ConversationsListState extends State<ConversationsList>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.black87,
+                color: isDark ? Colors.white : Colors.black87,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.black87),
+                border: Border.all(
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
               ),
-              child: const Text(
+              child: Text(
                 'Start New Chat',
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: Colors.white,
+                  color: isDark ? Colors.black87 : Colors.white,
                 ),
               ),
             ),
@@ -208,6 +283,7 @@ class _ConversationsListState extends State<ConversationsList>
 
   Widget _buildConversationCard(ConversationLocal conversation) {
     final bool isDeleting = _deletingIds.contains(conversation.id);
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -239,9 +315,11 @@ class _ConversationsListState extends State<ConversationsList>
                 ? Matrix4.translationValues(-MediaQuery.of(context).size.width, 0, 0)
                 : null,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.black87),
+              border: Border.all(
+                color: isDark ? Colors.grey[600]! : Colors.black87,
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.1),
@@ -254,11 +332,11 @@ class _ConversationsListState extends State<ConversationsList>
               contentPadding: const EdgeInsets.all(16),
               title: Text(
                 conversation.title ?? 'Untitled Chat',
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: Colors.black87,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -273,7 +351,7 @@ class _ConversationsListState extends State<ConversationsList>
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 14,
-                        color: Colors.grey[600],
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -285,7 +363,7 @@ class _ConversationsListState extends State<ConversationsList>
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 12,
-                      color: Colors.grey[500],
+                      color: isDark ? Colors.grey[500] : Colors.grey[500],
                     ),
                   ),
                 ],
@@ -310,7 +388,10 @@ class _ConversationsListState extends State<ConversationsList>
                     ),
                   ),
                 ],
-                child: const Icon(Icons.more_vert, color: Colors.black87),
+                child: Icon(
+                  Icons.more_vert,
+                  color: Theme.of(context).iconTheme.color,
+                ),
               ),
               onTap: () => _openConversation(conversation.id),
             ),

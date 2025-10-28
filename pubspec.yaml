@@ -50,6 +50,9 @@ dependencies:
   
   # GetX for state management, dependency injection, and routing
   get: ^4.6.6
+  
+  # Markdown rendering
+  flutter_markdown: ^0.6.18
 
 dev_dependencies:
   flutter_test:

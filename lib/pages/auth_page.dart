@@ -121,18 +121,25 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
       return FadeTransition(
         opacity: _fadeAnimation,
         child: Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           body: _showSuccessAnimation
               ? Center(
-                  child: SizedBox(
-                    width: 200,
-                    height: 200,
-                    child: Lottie.asset(
-                      'assets/fonts/svgs/check.json',
-                      fit: BoxFit.contain,
-                    ),
+                child: Container(
+                  width: 200,
+                  height: 200,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white.withOpacity(0.1)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(100),
                   ),
-                )
+                  child: Lottie.asset(
+                    'assets/fonts/svgs/check.json',
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              )
               : SafeArea(
                   child: SingleChildScrollView(
                     child: ConstrainedBox(
@@ -656,14 +663,18 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
         }
       } catch (e) {
         if (mounted) {
-          Get.snackbar(
-            'Error',
-            _getErrorMessage(e.toString()),
-            snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: Colors.red,
-            colorText: Colors.white,
-            duration: const Duration(seconds: 3),
+          // Check if it's a "user already exists" error
+          final bool isUserExistsError = e.toString().contains('User already registered');
+          
+          await _showErrorDialog(
+            title: widget.isLogin ? 'Login Failed' : 'Registration Failed',
+            message: _getErrorMessage(e.toString()),
           );
+          
+          // If user already exists and we're in register mode, switch to login
+          if (isUserExistsError && !widget.isLogin && widget.onToggleMode != null) {
+            widget.onToggleMode!();
+          }
         }
       } finally {
         if (mounted) {
@@ -696,13 +707,9 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
       // This is a placeholder implementation
     } catch (e) {
       if (mounted) {
-        Get.snackbar(
-          'Error',
-          _getErrorMessage(e.toString()),
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-          duration: const Duration(seconds: 3),
+        _showErrorDialog(
+          title: 'Authentication Failed',
+          message: _getErrorMessage(e.toString()),
         );
       }
     } finally {
@@ -716,13 +723,9 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
 
   void _handleForgotPassword() async {
     if (_emailController.text.isEmpty) {
-      Get.snackbar(
-        'Warning',
-        'Please enter your email address first',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.orange,
-        colorText: Colors.white,
-        duration: const Duration(seconds: 3),
+      _showErrorDialog(
+        title: 'Email Required',
+        message: 'Please enter your email address first to reset your password.',
       );
       return;
     }
@@ -733,24 +736,86 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
       await authController.resetPassword(_emailController.text.trim());
 
       if (mounted) {
-        Get.snackbar(
-          'Success',
-          'Password reset email sent! Check your inbox.',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.green,
-          colorText: Colors.white,
-          duration: const Duration(seconds: 3),
+        // Show success dialog instead of snackbar
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            contentPadding: const EdgeInsets.all(24),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Success Icon
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: Colors.green[50],
+                    borderRadius: BorderRadius.circular(40),
+                  ),
+                  child: Icon(
+                    Icons.check_circle_outline,
+                    color: Colors.green[600],
+                    size: 48,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Email Sent',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Password reset email sent! Please check your inbox and follow the instructions.',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 14,
+                    color: Colors.grey[700],
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.black87,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.black87),
+                    ),
+                    child: const Text(
+                      'Got It',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        Get.snackbar(
-          'Error',
-          _getErrorMessage(e.toString()),
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-          duration: const Duration(seconds: 3),
+        _showErrorDialog(
+          title: 'Reset Failed',
+          message: _getErrorMessage(e.toString()),
         );
       }
     }
@@ -758,19 +823,106 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
 
   String _getErrorMessage(String error) {
     if (error.contains('Invalid login credentials')) {
-      return 'Invalid email or password';
+      return 'Invalid email or password. Please check your credentials and try again.';
     } else if (error.contains('User already registered')) {
-      return 'An account with this email already exists';
+      return 'An account with this email already exists. Please sign in instead or use a different email.';
     } else if (error.contains('Password should be at least')) {
-      return 'Password must be at least 6 characters long';
+      return 'Password must be at least 6 characters long. Please choose a stronger password.';
     } else if (error.contains('Invalid email')) {
-      return 'Please enter a valid email address';
+      return 'Please enter a valid email address.';
     } else if (error.contains('Email not confirmed')) {
-      return 'Please check your email and confirm your account';
+      return 'Please check your email and confirm your account before signing in.';
     } else if (error.contains('Too many requests')) {
-      return 'Too many attempts. Please try again later';
+      return 'Too many attempts. Please wait a few minutes and try again.';
+    } else if (error.contains('Email rate limit exceeded')) {
+      return 'Too many password reset requests. Please wait a few minutes before trying again.';
+    } else if (error.contains('User not found')) {
+      return 'No account found with this email. Please check your email or create a new account.';
     } else {
-      return 'An error occurred. Please try again';
+      return 'An error occurred. Please try again or contact support if the problem persists.';
     }
+  }
+
+  Future<void> _showErrorDialog({required String title, required String message}) async {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Alert Animation
+            Container(
+              width: 120,
+              height: 120,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white.withOpacity(0.1)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(60),
+              ),
+              child: Lottie.asset(
+                'assets/fonts/svgs/alert.json',
+                fit: BoxFit.contain,
+                repeat: false,
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Title
+            Text(
+              title,
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            // Message
+            Text(
+              message,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+                color: Colors.grey[700],
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            // Close Button
+            GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: Colors.black87,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.black87),
+                ),
+                child: const Text(
+                  'Try Again',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

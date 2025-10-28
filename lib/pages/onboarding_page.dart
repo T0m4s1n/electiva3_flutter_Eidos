@@ -50,16 +50,23 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Colors.white,
-              Colors.grey[50]!,
-            ],
+            colors: isDark
+                ? [
+                    const Color(0xFF121212),
+                    const Color(0xFF1E1E1E),
+                  ]
+                : [
+                    Colors.white,
+                    Colors.grey[50]!,
+                  ],
           ),
         ),
         child: SafeArea(
@@ -191,8 +198,16 @@ class _OnboardingPageState extends State<OnboardingPage> {
               // Lottie Animation with scale
               Transform.scale(
                 scale: value,
-                child: SizedBox(
+                child: Container(
                   height: 180,
+                  width: 180,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white.withOpacity(0.1)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(90),
+                  ),
                   child: Lottie.asset(
                     lottieAsset,
                     fit: BoxFit.contain,

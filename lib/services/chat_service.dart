@@ -21,12 +21,16 @@ class ChatService {
       userId: userId,
     );
 
+    // Save to LOCAL DATABASE ONLY
     await ChatDatabase.upsertConversation(conversation.toRow());
-
-    // Si el usuario está logueado, sincronizar
-    if (userId != null) {
-      await _syncService.syncPending();
-    }
+    
+    // Wait for database to fully persist
+    await Future.delayed(const Duration(milliseconds: 100));
+    
+    debugPrint('ChatService.createConversation - Saved to local database only, skipping online sync');
+    
+    // SKIP ONLINE SYNC - Using local storage only
+    debugPrint('ChatService.createConversation - Using local storage only, skipping online sync');
 
     return conversation;
   }
@@ -41,6 +45,8 @@ class ChatService {
   }) async {
     // Obtener el siguiente número de secuencia
     final int seq = await ChatDatabase.getNextSequenceNumber(conversationId);
+    
+    debugPrint('ChatService.addMessage - Conversation ID: $conversationId, Role: $role, Seq: $seq');
 
     final MessageLocal message = MessageFactory.createNew(
       conversationId: conversationId,
@@ -50,23 +56,27 @@ class ChatService {
       status: status,
     ).copyWith(seq: seq);
 
+    // Save the message to LOCAL DATABASE ONLY
     await ChatDatabase.upsertMessage(message.toRow());
+    
+    // Wait for database to fully persist
+    await Future.delayed(const Duration(milliseconds: 100));
+    
+    // Verify it was saved
+    debugPrint('ChatService.addMessage - Verifying message was saved: ${message.id}');
+    final List<MessageLocal> savedMessages = await getMessages(conversationId);
+    final int matchingMessages = savedMessages.where((m) => m.id == message.id).length;
+    debugPrint('ChatService.addMessage - Verification: Found $matchingMessages messages with ID ${message.id}');
 
     // Actualizar last_message_at de la conversación
     final String now = DateTime.now().toUtc().toIso8601String();
     await _updateConversationTimestamp(conversationId, now);
 
-    debugPrint('addMessage - Message saved locally: ${message.id}');
-    debugPrint('addMessage - Current user: ${AuthService.currentUser?.id}');
+    debugPrint('ChatService.addMessage - Message saved successfully: ${message.id}');
+    debugPrint('ChatService.addMessage - Total messages in conversation: ${savedMessages.length}');
 
-    // Si el usuario está logueado, sincronizar en background (no bloquear)
-    final String? userId = AuthService.currentUser?.id;
-    if (userId != null) {
-      // Sincronizar en background para no bloquear la respuesta
-      _syncService.syncPending().catchError((e) {
-        debugPrint('Background sync error: $e');
-      });
-    }
+    // SKIP ONLINE SYNC - Using local storage only
+    debugPrint('ChatService.addMessage - Using local storage only, skipping online sync');
 
     return message;
   }
@@ -171,43 +181,27 @@ class ChatService {
 
   /// Eliminar una conversación y todos sus mensajes
   static Future<void> deleteConversation(String conversationId) async {
-    debugPrint('Deleting conversation: $conversationId');
+    debugPrint('ChatService.deleteConversation called for: $conversationId');
     
     try {
-      final Database db = await ChatDatabase.instance;
-      
-      // Delete messages first (ON DELETE CASCADE should handle this, but doing it explicitly)
-      final int messagesDeleted = await db.delete(
-        'messages',
-        where: 'conversation_id = ?',
-        whereArgs: [conversationId],
-      );
-      debugPrint('Deleted $messagesDeleted messages for conversation $conversationId');
-      
-      // Delete conversation
-      final int conversationsDeleted = await db.delete(
-        'conversations',
-        where: 'id = ?',
-        whereArgs: [conversationId],
-      );
-      debugPrint('Deleted $conversationsDeleted conversations with id $conversationId');
-      
-      if (conversationsDeleted == 0) {
-        debugPrint('Warning: No conversation was deleted - conversation may not exist');
-        throw Exception('Conversation not found or already deleted');
-      }
-      
-      if (conversationsDeleted > 0) {
-        debugPrint('Successfully deleted conversation $conversationId');
-      }
+      // Delete from local database storage
+      debugPrint('Calling ChatDatabase.deleteConversation');
+      await ChatDatabase.deleteConversation(conversationId);
+      debugPrint('ChatDatabase.deleteConversation completed successfully');
 
       // Sincronizar si está logueado
       final String? userId = AuthService.currentUser?.id;
       if (userId != null) {
+        debugPrint('User is logged in, syncing pending changes');
         await _syncService.syncPending();
+      } else {
+        debugPrint('User is not logged in, skipping sync');
       }
-    } catch (e) {
+      
+      debugPrint('Successfully completed delete for conversation $conversationId');
+    } catch (e, stackTrace) {
       debugPrint('Error in deleteConversation: $e');
+      debugPrint('Stack trace: $stackTrace');
       rethrow;
     }
   }

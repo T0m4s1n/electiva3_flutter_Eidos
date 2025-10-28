@@ -3,13 +3,14 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:flutter/foundation.dart';
 
 class ChatDatabase {
-  // Local storage enabled for chat functionality
+  // Local storage enabled for chat functionality - FORCE LOCAL MODE
   static const bool _enabled = true;
   
   static const String _dbName = 'chat_app.db';
-  static const int _dbVersion = 1;
+  static const int _dbVersion = 3;
 
   static Database? _db;
 
@@ -56,7 +57,29 @@ class ChatDatabase {
 
   static const String _sqlIdxMsgConvCreated = '''
   CREATE INDEX IF NOT EXISTS idx_messages_conv_created
-    ON messages(conversation_id, created_at, seq);
+ON messages(conversation_id, created_at, seq);
+  ''';
+
+  static const String _sqlCreateDocuments = '''
+  CREATE TABLE IF NOT EXISTS documents (
+    id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    user_id TEXT,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    file_path TEXT,
+    file_url TEXT,
+    is_current_version INTEGER NOT NULL DEFAULT 1,
+    version_number INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+  );
+  ''';
+
+  static const String _sqlIdxDocumentsConv = '''
+  CREATE INDEX IF NOT EXISTS idx_documents_conv
+    ON documents(conversation_id, updated_at);
   ''';
 
   static Future<Database> get instance async {
@@ -82,9 +105,28 @@ class ChatDatabase {
         await db.execute(_sqlCreateMessages);
         await db.execute(_sqlIdxConvUserUpdated);
         await db.execute(_sqlIdxMsgConvCreated);
+        await db.execute(_sqlCreateDocuments);
+        await db.execute(_sqlIdxDocumentsConv);
       },
       onUpgrade: (Database db, int oldVersion, int newVersion) async {
-        // Manejo de migraciones futuras
+        debugPrint('Database upgrade from version $oldVersion to $newVersion');
+        
+        if (oldVersion < 2) {
+          debugPrint('Running migration to v2: Cleaning up orphaned messages');
+          // Delete orphaned messages that don't have a valid conversation
+          final int deletedCount = await db.delete(
+            'messages',
+            where: 'conversation_id NOT IN (SELECT id FROM conversations)',
+          );
+          debugPrint('Deleted $deletedCount orphaned messages');
+        }
+        
+        if (oldVersion < 3) {
+          debugPrint('Running migration to v3: Creating documents table');
+          await db.execute(_sqlCreateDocuments);
+          await db.execute(_sqlIdxDocumentsConv);
+          debugPrint('Created documents table');
+        }
       },
     );
   }
@@ -118,24 +160,130 @@ class ChatDatabase {
             whereArgs: [id],
           );
         }
+        debugPrint('ChatDatabase: Updated conversation: $id');
       } else {
-        // Si no existe, hacer INSERT completo
-        await db.insert('conversations', conv);
+        // Si no existe, hacer INSERT completo usando transacción para asegurar commit
+        await db.transaction((txn) async {
+          await txn.insert('conversations', conv);
+        });
+        debugPrint('ChatDatabase: Created new conversation: $id');
+        
+        // Wait a moment for the transaction to commit
+        await Future.delayed(const Duration(milliseconds: 50));
+        
+        // Verify the conversation was created
+        final List<Map<String, Object?>> verify = await db.query(
+          'conversations',
+          where: 'id = ?',
+          whereArgs: [id],
+          limit: 1,
+        );
+        debugPrint('ChatDatabase: Verified conversation creation - found ${verify.length} entries');
+        
+        if (verify.isEmpty) {
+          debugPrint('ChatDatabase: ERROR - Conversation was not persisted after insert!');
+        }
       }
     } else {
       // Si no hay ID, hacer INSERT normal
       await db.insert('conversations', conv);
+      debugPrint('ChatDatabase: Created conversation without ID');
     }
   }
 
   static Future<void> upsertMessage(Map<String, Object?> msg) async {
-    if (!_enabled) return; // Disabled
-    final Database db = await instance;
-    await db.insert(
-      'messages',
-      msg,
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    if (!_enabled) {
+      debugPrint('ChatDatabase: Database disabled, skipping upsertMessage');
+      return;
+    }
+    
+    try {
+      final Database db = await instance;
+      debugPrint('ChatDatabase: Attempting to save message: ${msg['id']}');
+      debugPrint('ChatDatabase: Message data: $msg');
+      
+      // Ensure the conversation exists before inserting the message
+      final String? conversationId = msg['conversation_id'] as String?;
+      if (conversationId != null) {
+        final List<Map<String, Object?>> existingConv = await db.query(
+          'conversations',
+          where: 'id = ?',
+          whereArgs: [conversationId],
+          limit: 1,
+        );
+        
+        if (existingConv.isEmpty) {
+          debugPrint('ChatDatabase: ERROR - Conversation $conversationId does not exist in database');
+          debugPrint('ChatDatabase: This will cause a foreign key constraint failure');
+          debugPrint('ChatDatabase: Attempting to create a minimal conversation record...');
+          
+          // Use transaction to ensure both conversation and message are saved atomically
+          await db.transaction((txn) async {
+            // Create a minimal conversation record to fix the foreign key constraint
+            await txn.insert('conversations', {
+              'id': conversationId,
+              'user_id': null,
+              'title': 'New Chat',
+              'model': 'gpt-4o-mini',
+              'summary': null,
+              'is_archived': 0,
+              'last_message_at': msg['created_at'],
+              'created_at': msg['created_at'],
+              'updated_at': msg['created_at'],
+            });
+            
+            // Now insert the message in the same transaction
+            await txn.insert(
+              'messages',
+              msg,
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+          });
+          
+          debugPrint('ChatDatabase: Created conversation and message in single transaction');
+        } else {
+          debugPrint('ChatDatabase: Verified conversation exists');
+          
+          // Use transaction to ensure message is committed
+          await db.transaction((txn) async {
+            await txn.insert(
+              'messages',
+              msg,
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+          });
+        }
+      } else {
+        // No conversation ID provided
+        await db.insert(
+          'messages',
+          msg,
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      
+      // Wait a moment for transaction to commit
+      await Future.delayed(const Duration(milliseconds: 50));
+      
+      // Verify the message was saved
+      final List<Map<String, Object?>> saved = await db.query(
+        'messages',
+        where: 'id = ?',
+        whereArgs: [msg['id']],
+        limit: 1,
+      );
+      
+      debugPrint('ChatDatabase: Message saved successfully: ${msg['id']}');
+      debugPrint('ChatDatabase: Verification - Found ${saved.length} message(s) with this ID');
+      
+      if (saved.isEmpty) {
+        debugPrint('ChatDatabase: WARNING - Message was not found after insert!');
+      }
+    } catch (e) {
+      debugPrint('ChatDatabase: Error upserting message: $e');
+      debugPrint('ChatDatabase: Message data: $msg');
+      rethrow;
+    }
   }
 
   static Future<List<Map<String, Object?>>> getPendingMessages() async {
@@ -150,9 +298,18 @@ class ChatDatabase {
     if (!_enabled) return [];
     final Database db = await instance;
     if (userId == null) {
-      return db.query('conversations', where: 'user_id IS NULL');
+      return db.query(
+        'conversations',
+        where: 'user_id IS NULL',
+        orderBy: 'updated_at DESC, created_at DESC',
+      );
     }
-    return db.query('conversations', where: 'user_id = ?', whereArgs: [userId]);
+    return db.query(
+      'conversations',
+      where: 'user_id = ?',
+      whereArgs: [userId],
+      orderBy: 'updated_at DESC, created_at DESC',
+    );
   }
 
   static Future<void> markMessagesSynced(List<String> ids) async {
@@ -186,14 +343,52 @@ class ChatDatabase {
   static Future<List<Map<String, Object?>>> getMessagesByConversation(
     String conversationId,
   ) async {
-    if (!_enabled) return [];
-    final Database db = await instance;
-    return db.query(
-      'messages',
-      where: 'conversation_id = ? AND is_deleted = 0',
-      whereArgs: [conversationId],
-      orderBy: 'created_at ASC, seq ASC',
-    );
+    if (!_enabled) {
+      debugPrint('ChatDatabase: Database disabled, returning empty message list');
+      return [];
+    }
+    
+    try {
+      final Database db = await instance;
+      
+      // First, verify the conversation exists
+      final List<Map<String, Object?>> convCheck = await db.query(
+        'conversations',
+        where: 'id = ?',
+        whereArgs: [conversationId],
+        limit: 1,
+      );
+      debugPrint('ChatDatabase: Verification - Found ${convCheck.length} conversation(s) with ID $conversationId');
+      
+      // Get all messages for this conversation (including deleted ones for debugging)
+      final List<Map<String, Object?>> allMessages = await db.query(
+        'messages',
+        where: 'conversation_id = ?',
+        whereArgs: [conversationId],
+        orderBy: 'created_at ASC, seq ASC',
+      );
+      debugPrint('ChatDatabase: Found ${allMessages.length} total messages (including deleted)');
+      
+      // Get only non-deleted messages
+      final List<Map<String, Object?>> results = await db.query(
+        'messages',
+        where: 'conversation_id = ? AND is_deleted = 0',
+        whereArgs: [conversationId],
+        orderBy: 'created_at ASC, seq ASC',
+      );
+      
+      debugPrint('ChatDatabase: Retrieved ${results.length} active messages for conversation $conversationId');
+      
+      // Debug each message
+      for (final Map<String, Object?> msg in results) {
+        debugPrint('Message: id=${msg['id']}, role=${msg['role']}, content length=${(msg['content'] as String?)?.length ?? 0}');
+      }
+      
+      return results;
+    } catch (e) {
+      debugPrint('ChatDatabase: Error retrieving messages: $e');
+      return [];
+    }
   }
 
   static Future<Map<String, Object?>?> getConversationById(
@@ -257,6 +452,56 @@ class ChatDatabase {
       where: 'conversation_id = ? AND role = ? AND content LIKE ?',
       whereArgs: [conversationId, 'system', '%Sorry, I encountered an error%'],
     );
+  }
+
+  /// Delete a conversation and all its messages
+  static Future<void> deleteConversation(String conversationId) async {
+    if (!_enabled) return;
+    final Database db = await instance;
+    
+    try {
+      // Use a transaction to ensure atomicity
+      await db.transaction((txn) async {
+        // Delete all messages for this conversation first
+        final int messagesDeleted = await txn.delete(
+          'messages',
+          where: 'conversation_id = ?',
+          whereArgs: [conversationId],
+        );
+        debugPrint('Deleted $messagesDeleted messages for conversation $conversationId');
+        
+        // Delete the conversation
+        final int conversationsDeleted = await txn.delete(
+          'conversations',
+          where: 'id = ?',
+          whereArgs: [conversationId],
+        );
+        debugPrint('Deleted $conversationsDeleted conversations with id $conversationId');
+        
+        if (conversationsDeleted == 0) {
+          throw Exception('Conversation not found or already deleted');
+        }
+      });
+    } catch (e) {
+      debugPrint('Error deleting conversation: $e');
+      rethrow;
+    }
+  }
+
+  /// Clean up orphaned messages (messages without a valid conversation)
+  /// This fixes foreign key constraint errors
+  static Future<int> cleanupOrphanedMessages() async {
+    if (!_enabled) return 0;
+    final Database db = await instance;
+    
+    debugPrint('Cleaning up orphaned messages...');
+    final int deletedCount = await db.delete(
+      'messages',
+      where: 'conversation_id NOT IN (SELECT id FROM conversations)',
+    );
+    debugPrint('Deleted $deletedCount orphaned messages');
+    
+    return deletedCount;
   }
 
   static Future<void> close() async {
