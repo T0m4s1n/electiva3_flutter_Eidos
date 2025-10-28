@@ -214,77 +214,82 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   }
 
   Widget _buildEmptyState() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
+    return SingleChildScrollView(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        constraints: BoxConstraints(
+          minHeight: MediaQuery.of(context).size.height - 200,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(height: 20),
 
-                // Idea animation (plays in loop)
-                Center(
-                  child: Container(
-                    width: 200,
-                    height: 200,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.white.withOpacity(0.25)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Lottie.asset(
-                      'assets/fonts/svgs/idea.json',
-                      controller: _ideaController,
-                      fit: BoxFit.contain,
-                      repeat: true, // Loop the animation
-                      onLoaded: (composition) {
-                        // Set the duration and play the animation in a loop
-                        _ideaController.duration = composition.duration;
-                        _ideaController.repeat();
-                      },
-                    ),
-                  ),
+            // Idea animation (plays in loop)
+            Center(
+              child: Container(
+                width: 180,
+                height: 180,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white.withOpacity(0.25)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(90),
                 ),
-
-                const SizedBox(height: 30),
-
-                // Welcome message
-                Center(
-                  child: Text(
-                    'Welcome to your new chat!',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
+                child: Lottie.asset(
+                  'assets/fonts/svgs/idea.json',
+                  controller: _ideaController,
+                  fit: BoxFit.contain,
+                  repeat: true, // Loop the animation
+                  onLoaded: (composition) {
+                    // Set the duration and play the animation in a loop
+                    _ideaController.duration = composition.duration;
+                    _ideaController.repeat();
+                  },
                 ),
+              ),
+            ),
 
-                const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-                Center(
-                  child: Text(
-                    'Start typing your message below to begin our conversation',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 16,
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.grey[400]
-                          : Colors.grey,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
+            // Welcome message
+            Text(
+              'Welcome to your new chat!',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              textAlign: TextAlign.center,
+            ),
+
+            const SizedBox(height: 12),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                'Start typing your message below to begin our conversation',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 15,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey[400]
+                      : Colors.grey,
                 ),
+                textAlign: TextAlign.center,
+              ),
+            ),
 
-                const SizedBox(height: 40),
+            const SizedBox(height: 32),
 
-                // Create Document button
-                _buildDocumentButton(),
+            // Create Document button
+            _buildDocumentButton(),
 
-                const SizedBox(height: 40),
-        ],
+            const SizedBox(height: 20),
+          ],
+        ),
       ),
     );
   }
@@ -295,10 +300,10 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
     return GestureDetector(
       onTap: () => chatController.handleDocumentCreation(),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF1E1E1E) : Colors.grey[50],
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isDark ? Colors.grey[600]! : Colors.black87,
             width: 1.5,
@@ -315,8 +320,8 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
           children: [
             // Creating Animation
             Container(
-              width: 80,
-              height: 80,
+              width: 70,
+              height: 70,
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Theme.of(context).brightness == Brightness.dark
@@ -330,45 +335,51 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                 repeat: true,
               ),
             ),
-            const SizedBox(width: 20),
+            const SizedBox(width: 16),
             // Text content
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     'Create Document',
                     style: TextStyle(
                       fontFamily: 'Poppins',
-                      fontSize: 20,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Get AI-powered help to write and edit documents',
                     style: TextStyle(
                       fontFamily: 'Poppins',
-                      fontSize: 14,
+                      fontSize: 13,
                       color: isDark ? Colors.grey[400] : Colors.grey[600],
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
+            const SizedBox(width: 12),
             // Arrow icon
             Container(
-              width: 40,
-              height: 40,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
                 color: isDark ? Colors.white : Colors.black87,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
                 Icons.arrow_forward,
                 color: isDark ? Colors.black87 : Colors.white,
-                size: 20,
+                size: 18,
               ),
             ),
           ],
