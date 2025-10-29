@@ -4,6 +4,7 @@ import '../controllers/preferences_controller.dart';
 import '../controllers/theme_controller.dart';
 import '../models/chat_rule.dart';
 import '../routes/app_routes.dart';
+import '../widgets/animated_icon_background.dart';
 
 class PreferencesPage extends StatelessWidget {
   const PreferencesPage({super.key});
@@ -17,7 +18,10 @@ class PreferencesPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
-        child: Padding(
+        child: Stack(
+          children: [
+            const Positioned.fill(child: ChatIconBackground()),
+            Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -50,7 +54,7 @@ class PreferencesPage extends StatelessWidget {
                   ),
                   const SizedBox(width: 16),
                   Text(
-                    'Preferencias',
+                    'Preferences',
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 24,
@@ -71,7 +75,7 @@ class PreferencesPage extends StatelessWidget {
                       // App Preferences Section
                       _buildSectionHeader(
                         context,
-                        'Preferencias de la Aplicación',
+                        'App Preferences',
                         Icons.settings_outlined,
                       ),
                       const SizedBox(height: 16),
@@ -86,7 +90,7 @@ class PreferencesPage extends StatelessWidget {
                       // Chat Preferences Section
                       _buildSectionHeader(
                         context,
-                        'Preferencias del Chat',
+                        'Chat Preferences',
                         Icons.chat_outlined,
                       ),
                       const SizedBox(height: 16),
@@ -97,7 +101,7 @@ class PreferencesPage extends StatelessWidget {
                       // Chat Rules Section
                       _buildSectionHeader(
                         context,
-                        'Reglas del Chat',
+                        'Chat Rules',
                         Icons.rule_outlined,
                       ),
                       const SizedBox(height: 16),
@@ -106,7 +110,7 @@ class PreferencesPage extends StatelessWidget {
                       const SizedBox(height: 32),
 
                       // More Section
-                      _buildSectionHeader(context, 'Más', Icons.more_horiz),
+                      _buildSectionHeader(context, 'More', Icons.more_horiz),
                       const SizedBox(height: 16),
                       _buildMoreCard(context),
                     ],
@@ -115,6 +119,8 @@ class PreferencesPage extends StatelessWidget {
               ),
             ],
           ),
+        ),
+          ],
         ),
       ),
     );
@@ -280,7 +286,7 @@ class PreferencesPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Tema de la Aplicación',
+            'App Theme',
             style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 16,
@@ -290,7 +296,7 @@ class PreferencesPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Cambia entre modo claro y oscuro',
+            'Switch between light and dark mode',
             style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 14,
@@ -316,8 +322,8 @@ class PreferencesPage extends StatelessWidget {
                     const SizedBox(width: 8),
                     Text(
                       themeController.isDarkMode.value
-                          ? 'Modo Oscuro'
-                          : 'Modo Claro',
+                          ? 'Dark Mode'
+                          : 'Light Mode',
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 16,
@@ -371,7 +377,7 @@ class PreferencesPage extends StatelessWidget {
         children: [
           // Model selection
           Text(
-            'Modelo de IA',
+            'AI Model',
             style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 16,
@@ -381,7 +387,7 @@ class PreferencesPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Selecciona el modelo a utilizar (por ahora solo GPT disponible)',
+            'Choose the model to use (GPT available for now)',
             style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 14,
@@ -450,7 +456,7 @@ class PreferencesPage extends StatelessWidget {
           const SizedBox(height: 24),
 
           Text(
-            'Personalidad de la IA',
+            'AI Personality',
             style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 16,
@@ -460,7 +466,7 @@ class PreferencesPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Elige cómo quieres que responda la IA',
+            'Choose how you want the AI to respond',
             style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 14,
@@ -585,7 +591,7 @@ class PreferencesPage extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Reglas Personalizadas',
+                'Custom Rules',
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 16,
@@ -621,7 +627,7 @@ class PreferencesPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Define qué debe y qué no debe hacer la IA',
+            'Define what the AI should and should not do',
             style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 14,
@@ -666,7 +672,7 @@ class PreferencesPage extends StatelessWidget {
                 if (preferencesController.positiveRules.isNotEmpty) ...[
                   _buildRulesSection(
                     context,
-                    'Reglas Positivas (Debe hacer)',
+                    'Positive Rules (Should do)',
                     preferencesController.positiveRules,
                     Colors.green,
                     Icons.check_circle_outline,
@@ -677,7 +683,7 @@ class PreferencesPage extends StatelessWidget {
                 if (preferencesController.negativeRules.isNotEmpty) ...[
                   _buildRulesSection(
                     context,
-                    'Reglas Negativas (No debe hacer)',
+                    'Negative Rules (Should not do)',
                     preferencesController.negativeRules,
                     Colors.red,
                     Icons.cancel_outlined,
@@ -785,7 +791,7 @@ class PreferencesPage extends StatelessWidget {
         builder: (context, setState) => AlertDialog(
           backgroundColor: Theme.of(context).cardTheme.color,
           title: Text(
-            'Agregar Regla',
+            'Add Rule',
             style: TextStyle(
               fontFamily: 'Poppins',
               fontWeight: FontWeight.w600,
@@ -798,7 +804,7 @@ class PreferencesPage extends StatelessWidget {
               TextField(
                 controller: textController,
                 decoration: InputDecoration(
-                  labelText: 'Texto de la regla',
+                  labelText: 'Rule text',
                   labelStyle: TextStyle(
                     fontFamily: 'Poppins',
                     color: Theme.of(context).colorScheme.onSurface,
@@ -815,7 +821,7 @@ class PreferencesPage extends StatelessWidget {
                   Expanded(
                     child: RadioListTile<bool>(
                       title: Text(
-                        'Debe hacer',
+                        'Should do',
                         style: TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 14,
@@ -830,7 +836,7 @@ class PreferencesPage extends StatelessWidget {
                   Expanded(
                     child: RadioListTile<bool>(
                       title: Text(
-                        'No debe hacer',
+                        'Should not do',
                         style: TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 14,
@@ -850,7 +856,7 @@ class PreferencesPage extends StatelessWidget {
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: Text(
-                'Cancelar',
+                'Cancel',
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   color: Theme.of(context).colorScheme.onSurface,
@@ -871,7 +877,7 @@ class PreferencesPage extends StatelessWidget {
                 backgroundColor: Theme.of(context).colorScheme.primary,
               ),
               child: Text(
-                'Agregar',
+                'Add',
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   color: Theme.of(context).brightness == Brightness.dark
@@ -898,7 +904,7 @@ class PreferencesPage extends StatelessWidget {
         builder: (context, setState) => AlertDialog(
           backgroundColor: Theme.of(context).cardTheme.color,
           title: Text(
-            'Editar Regla',
+            'Edit Rule',
             style: TextStyle(
               fontFamily: 'Poppins',
               fontWeight: FontWeight.w600,
@@ -911,7 +917,7 @@ class PreferencesPage extends StatelessWidget {
               TextField(
                 controller: textController,
                 decoration: InputDecoration(
-                  labelText: 'Texto de la regla',
+                  labelText: 'Rule text',
                   labelStyle: TextStyle(
                     fontFamily: 'Poppins',
                     color: Theme.of(context).colorScheme.onSurface,
@@ -928,7 +934,7 @@ class PreferencesPage extends StatelessWidget {
                   Expanded(
                     child: RadioListTile<bool>(
                       title: Text(
-                        'Debe hacer',
+                        'Should do',
                         style: TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 14,
@@ -943,7 +949,7 @@ class PreferencesPage extends StatelessWidget {
                   Expanded(
                     child: RadioListTile<bool>(
                       title: Text(
-                        'No debe hacer',
+                        'Should not do',
                         style: TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 14,
@@ -963,7 +969,7 @@ class PreferencesPage extends StatelessWidget {
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: Text(
-                'Cancelar',
+                'Cancel',
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   color: Theme.of(context).colorScheme.onSurface,
@@ -985,7 +991,7 @@ class PreferencesPage extends StatelessWidget {
                 backgroundColor: Theme.of(context).colorScheme.primary,
               ),
               child: Text(
-                'Guardar',
+                'Save',
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   color: Theme.of(context).brightness == Brightness.dark
@@ -1006,7 +1012,7 @@ class PreferencesPage extends StatelessWidget {
       builder: (context) => AlertDialog(
         backgroundColor: Theme.of(context).cardTheme.color,
         title: Text(
-          'Eliminar Regla',
+          'Delete Rule',
           style: TextStyle(
             fontFamily: 'Poppins',
             fontWeight: FontWeight.w600,
@@ -1014,7 +1020,7 @@ class PreferencesPage extends StatelessWidget {
           ),
         ),
         content: Text(
-          '¿Estás seguro de que quieres eliminar esta regla?',
+          'Are you sure you want to delete this rule?',
           style: TextStyle(
             fontFamily: 'Poppins',
             color: Theme.of(context).colorScheme.onSurface,
@@ -1024,7 +1030,7 @@ class PreferencesPage extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: Text(
-              'Cancelar',
+              'Cancel',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 color: Theme.of(context).colorScheme.onSurface,
@@ -1038,7 +1044,7 @@ class PreferencesPage extends StatelessWidget {
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: Text(
-              'Eliminar',
+              'Delete',
               style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
             ),
           ),

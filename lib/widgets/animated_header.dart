@@ -505,7 +505,7 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                         // Preferences button
                                         _buildSkeletonButton(
                                           icon: Icons.settings_outlined,
-                                          text: 'Preferencias',
+                                          text: 'Preferences',
                                           onTap: () {
                                             _closeMenu();
                                             Future.delayed(

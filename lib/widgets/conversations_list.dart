@@ -190,6 +190,18 @@ class _ConversationsListState extends State<ConversationsList>
     }
   }
 
+  Future<void> _archiveConversation(String conversationId, bool archive) async {
+    try {
+      await ChatService.toggleConversationArchive(conversationId, archive);
+      await _loadConversations();
+      if (archive && navController.showChatView.value && chatController.currentConversationId.value == conversationId) {
+        navController.hideChat();
+      }
+    } catch (e) {
+      debugPrint('Error archiving conversation: $e');
+    }
+  }
+
   Future<void> _syncToSupabase() async {
     try {
       setState(() {
@@ -259,9 +271,10 @@ class _ConversationsListState extends State<ConversationsList>
               child: ListView.builder(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
-                itemCount: conversations.length,
+                itemCount: conversations.where((c) => !c.isArchived).length,
                 itemBuilder: (context, index) {
-                  final conversation = conversations[index];
+                  final visible = conversations.where((c) => !c.isArchived).toList();
+                  final conversation = visible[index];
                   return _buildConversationCard(conversation);
                 },
               ),
@@ -480,9 +493,28 @@ class _ConversationsListState extends State<ConversationsList>
                     case 'delete':
                       _deleteConversation(conversation.id);
                       break;
+                    case 'archive':
+                      _archiveConversation(conversation.id, true);
+                      break;
+                    case 'unarchive':
+                      _archiveConversation(conversation.id, false);
+                      break;
                   }
                 },
                 itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: conversation.isArchived ? 'unarchive' : 'archive',
+                    child: Row(
+                      children: [
+                        Icon(
+                          conversation.isArchived ? Icons.unarchive : Icons.archive_outlined,
+                          color: Theme.of(context).iconTheme.color,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(conversation.isArchived ? 'Unarchive' : 'Archive'),
+                      ],
+                    ),
+                  ),
                   const PopupMenuItem(
                     value: 'delete',
                     child: Row(
