@@ -175,28 +175,4 @@ If you see asset (Lottie) errors, ensure `assets/fonts/svgs/` contains the JSON 
 debugPrint('Error: $e');
 ```
 
-## 📄 License
-
-This project is licensed under the MIT License. See `LICENSE` for details.
-
-## 🤝 Contributions
-
-Contributions are welcome. Please:
-
-1. Fork the project
-2. Create a feature branch
-3. Commit your changes
-4. Push to your branch
-5. Open a Pull Request
-
-## 📞 Support
-
-If you have questions or issues:
-
-1. Review the documentation
-2. Search existing issues
-3. Open a new issue if needed
-
----
-
 **Enjoy using Eidos!** 🚀
