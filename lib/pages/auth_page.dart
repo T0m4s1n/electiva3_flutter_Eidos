@@ -14,10 +14,6 @@ class AuthPage extends StatelessWidget {
     final NavigationController navController = Get.find<NavigationController>();
 
     return Obx(() {
-      if (authController.isLoading.value) {
-        return const Center(child: CircularProgressIndicator());
-      }
-
       return AuthView(
         onBack: () => navController.hideAuth(),
         isLogin: navController.isLoginView.value,
@@ -114,458 +110,564 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final AuthController authController = Get.find<AuthController>();
 
-    return Obx(() {
-      if (authController.isLoading.value) {
-        return const Center(child: CircularProgressIndicator());
-      }
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: Stack(
+          children: [
+            // Animated icon background
+            const Positioned.fill(child: AuthIconBackground()),
 
-      return FadeTransition(
-        opacity: _fadeAnimation,
-        child: Scaffold(
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          body: Stack(
-            children: [
-              // Animated icon background
-              const Positioned.fill(
-                child: AuthIconBackground(),
-              ),
-              
-              // Main content
-              _showSuccessAnimation
-              ? Center(
-                child: Container(
-                  width: 200,
-                  height: 200,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? Colors.white.withOpacity(0.1)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                  child: Lottie.asset(
-                    'assets/fonts/svgs/check.json',
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              )
-              : SafeArea(
-                  child: SingleChildScrollView(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: MediaQuery.of(context).size.height - 100,
+            // Main content
+            _showSuccessAnimation
+                ? Center(
+                    child: Container(
+                      width: 200,
+                      height: 200,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white.withOpacity(0.1)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(100),
                       ),
-                      child: IntrinsicHeight(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                          children: [
-                            const SizedBox(height: 20),
+                      child: Lottie.asset(
+                        'assets/fonts/svgs/check.json',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  )
+                : SafeArea(
+                    child: SingleChildScrollView(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: MediaQuery.of(context).size.height - 100,
+                        ),
+                        child: IntrinsicHeight(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              children: [
+                                const SizedBox(height: 20),
 
-                            // Title centered without back button with animation
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 300),
-                              transitionBuilder:
-                                  (Widget child, Animation<double> animation) {
-                                return FadeTransition(
-                                  opacity: animation,
-                                  child: child,
-                                );
-                              },
-                              child: Text(
-                                widget.isLogin
-                                    ? 'Log In'
-                                    : 'Create Account',
-                                key: ValueKey(widget.isLogin),
-                                style: const TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-
-                              const SizedBox(height: 40),
-
-                              // Auth form
-                              SlideTransition(
-                                position: _slideAnimation,
-                                child: Container(
-                                  padding: const EdgeInsets.all(24),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[50],
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(color: Colors.black87),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.05,
-                                        ),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
+                                // Title centered without back button with animation
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 300),
+                                  transitionBuilder:
+                                      (
+                                        Widget child,
+                                        Animation<double> animation,
+                                      ) {
+                                        return FadeTransition(
+                                          opacity: animation,
+                                          child: child,
+                                        );
+                                      },
+                                  child: Text(
+                                    widget.isLogin
+                                        ? 'Log In'
+                                        : 'Create Account',
+                                    key: ValueKey(widget.isLogin),
+                                    style: const TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                                    textAlign: TextAlign.center,
                                   ),
-                                  child: Form(
-                                    key: _formKey,
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        // Welcome text with animation
-                                        AnimatedSwitcher(
-                                          duration: const Duration(milliseconds: 300),
-                                          transitionBuilder:
-                                              (Widget child, Animation<double> animation) {
-                                            return FadeTransition(
-                                              opacity: animation,
-                                              child: SlideTransition(
-                                                position: Tween<Offset>(
-                                                  begin: const Offset(0, 0.1),
-                                                  end: Offset.zero,
-                                                ).animate(animation),
-                                                child: child,
-                                              ),
-                                            );
-                                          },
-                                          child: Center(
-                                            key: ValueKey('welcome_${widget.isLogin}'),
-                                            child: Text(
-                                              widget.isLogin
-                                                  ? 'Welcome back!'
-                                                  : 'Join Eidos today',
-                                              style: const TextStyle(
-                                                fontFamily: 'Poppins',
-                                                fontSize: 20,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.black87,
-                                              ),
-                                              textAlign: TextAlign.center,
-                                            ),
+                                ),
+
+                                const SizedBox(height: 40),
+
+                                // Auth form
+                                SlideTransition(
+                                  position: _slideAnimation,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(24),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[50],
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(color: Colors.black87),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.05,
                                           ),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 2),
                                         ),
-
-                                        const SizedBox(height: 8),
-
-                                        AnimatedSwitcher(
-                                          duration: const Duration(milliseconds: 300),
-                                          transitionBuilder:
-                                              (Widget child, Animation<double> animation) {
-                                            return FadeTransition(
-                                              opacity: animation,
-                                              child: SlideTransition(
-                                                position: Tween<Offset>(
-                                                  begin: const Offset(0, 0.1),
-                                                  end: Offset.zero,
-                                                ).animate(animation),
-                                                child: child,
-                                              ),
-                                            );
-                                          },
-                                          child: Center(
-                                            key: ValueKey('subtitle_${widget.isLogin}'),
-                                            child: Text(
-                                              widget.isLogin
-                                                  ? 'Sign in to continue your journey'
-                                                  : 'Create your account to get started',
-                                              style: TextStyle(
-                                                fontFamily: 'Poppins',
-                                                fontSize: 14,
-                                                color: Colors.grey[600],
-                                              ),
-                                              textAlign: TextAlign.center,
+                                      ],
+                                    ),
+                                    child: Form(
+                                      key: _formKey,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          // Welcome text with animation
+                                          AnimatedSwitcher(
+                                            duration: const Duration(
+                                              milliseconds: 300,
                                             ),
-                                          ),
-                                        ),
-
-                                        const SizedBox(height: 32),
-
-                                        // Email field
-                                        _buildTextField(
-                                          controller: _emailController,
-                                          label: 'Email',
-                                          hint: 'Enter your email',
-                                          icon: Icons.email_outlined,
-                                          keyboardType:
-                                              TextInputType.emailAddress,
-                                          validator: (value) {
-                                            if (value == null ||
-                                                value.isEmpty) {
-                                              return 'Please enter your email';
-                                            }
-                                            if (!RegExp(
-                                              r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                                            ).hasMatch(value)) {
-                                              return 'Please enter a valid email';
-                                            }
-                                            return null;
-                                          },
-                                        ),
-
-                                        const SizedBox(height: 20),
-
-                                        // Password field
-                                        _buildTextField(
-                                          controller: _passwordController,
-                                          label: 'Password',
-                                          hint: 'Enter your password',
-                                          icon: Icons.lock_outline,
-                                          isPassword: true,
-                                          isPasswordVisible: _isPasswordVisible,
-                                          onTogglePassword: () {
-                                            setState(() {
-                                              _isPasswordVisible =
-                                                  !_isPasswordVisible;
-                                            });
-                                          },
-                                          validator: (value) {
-                                            if (value == null ||
-                                                value.isEmpty) {
-                                              return 'Please enter your password';
-                                            }
-                                            if (value.length < 6) {
-                                              return 'Password must be at least 6 characters';
-                                            }
-                                            return null;
-                                          },
-                                        ),
-
-                                        // Confirm password field (only for register) with animation
-                                        AnimatedSwitcher(
-                                          duration: const Duration(milliseconds: 300),
-                                          transitionBuilder:
-                                              (Widget child, Animation<double> animation) {
-                                            return FadeTransition(
-                                              opacity: animation,
-                                              child: SizeTransition(
-                                                sizeFactor: animation,
-                                                axisAlignment: -1.0,
-                                                child: child,
-                                              ),
-                                            );
-                                          },
-                                          child: !widget.isLogin
-                                              ? Column(
-                                                  key: const ValueKey('confirm_password'),
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.stretch,
-                                                  children: [
-                                                    const SizedBox(height: 20),
-                                                    _buildTextField(
-                                                      controller:
-                                                          _confirmPasswordController,
-                                                      label: 'Confirm Password',
-                                                      hint: 'Confirm your password',
-                                                      icon: Icons.lock_outline,
-                                                      isPassword: true,
-                                                      isPasswordVisible:
-                                                          _isConfirmPasswordVisible,
-                                                      onTogglePassword: () {
-                                                        setState(() {
-                                                          _isConfirmPasswordVisible =
-                                                              !_isConfirmPasswordVisible;
-                                                        });
-                                                      },
-                                                      validator: (value) {
-                                                        if (value == null ||
-                                                            value.isEmpty) {
-                                                          return 'Please confirm your password';
-                                                        }
-                                                        if (value !=
-                                                            _passwordController.text) {
-                                                          return 'Passwords do not match';
-                                                        }
-                                                        return null;
-                                                      },
+                                            transitionBuilder:
+                                                (
+                                                  Widget child,
+                                                  Animation<double> animation,
+                                                ) {
+                                                  return FadeTransition(
+                                                    opacity: animation,
+                                                    child: SlideTransition(
+                                                      position: Tween<Offset>(
+                                                        begin: const Offset(
+                                                          0,
+                                                          0.1,
+                                                        ),
+                                                        end: Offset.zero,
+                                                      ).animate(animation),
+                                                      child: child,
                                                     ),
-                                                  ],
-                                                )
-                                              : const SizedBox.shrink(key: ValueKey('no_confirm_password')),
-                                        ),
-
-                                        const SizedBox(height: 32),
-
-                                        // Submit button
-                                        GestureDetector(
-                                          onTap: _handleSubmit,
-                                          child: Container(
-                                            width: double.infinity,
-                                            padding: const EdgeInsets.symmetric(
-                                              vertical: 16,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: Colors.black87,
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              border: Border.all(
-                                                color: Colors.black87,
+                                                  );
+                                                },
+                                            child: Center(
+                                              key: ValueKey(
+                                                'welcome_${widget.isLogin}',
                                               ),
-                                            ),
-                                            child: Text(
-                                              widget.isLogin
-                                                  ? 'Log In'
-                                                  : 'Create Account',
-                                              style: const TextStyle(
-                                                fontFamily: 'Poppins',
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.white,
+                                              child: Text(
+                                                widget.isLogin
+                                                    ? 'Welcome back!'
+                                                    : 'Join Eidos today',
+                                                style: const TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 20,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.black87,
+                                                ),
+                                                textAlign: TextAlign.center,
                                               ),
-                                              textAlign: TextAlign.center,
                                             ),
                                           ),
-                                        ),
 
-                                        const SizedBox(height: 20),
+                                          const SizedBox(height: 8),
 
-                                        // Divider
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Divider(
-                                                color: Colors.grey[300],
+                                          AnimatedSwitcher(
+                                            duration: const Duration(
+                                              milliseconds: 300,
+                                            ),
+                                            transitionBuilder:
+                                                (
+                                                  Widget child,
+                                                  Animation<double> animation,
+                                                ) {
+                                                  return FadeTransition(
+                                                    opacity: animation,
+                                                    child: SlideTransition(
+                                                      position: Tween<Offset>(
+                                                        begin: const Offset(
+                                                          0,
+                                                          0.1,
+                                                        ),
+                                                        end: Offset.zero,
+                                                      ).animate(animation),
+                                                      child: child,
+                                                    ),
+                                                  );
+                                                },
+                                            child: Center(
+                                              key: ValueKey(
+                                                'subtitle_${widget.isLogin}',
+                                              ),
+                                              child: Text(
+                                                widget.isLogin
+                                                    ? 'Sign in to continue your journey'
+                                                    : 'Create your account to get started',
+                                                style: TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 14,
+                                                  color: Colors.grey[600],
+                                                ),
+                                                textAlign: TextAlign.center,
                                               ),
                                             ),
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 16,
+                                          ),
+
+                                          const SizedBox(height: 32),
+
+                                          // Email field
+                                          _buildTextField(
+                                            controller: _emailController,
+                                            label: 'Email',
+                                            hint: 'Enter your email',
+                                            icon: Icons.email_outlined,
+                                            keyboardType:
+                                                TextInputType.emailAddress,
+                                            validator: (value) {
+                                              if (value == null ||
+                                                  value.isEmpty) {
+                                                return 'Please enter your email';
+                                              }
+                                              if (!RegExp(
+                                                r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                                              ).hasMatch(value)) {
+                                                return 'Please enter a valid email';
+                                              }
+                                              return null;
+                                            },
+                                          ),
+
+                                          const SizedBox(height: 20),
+
+                                          // Password field
+                                          _buildTextField(
+                                            controller: _passwordController,
+                                            label: 'Password',
+                                            hint: 'Enter your password',
+                                            icon: Icons.lock_outline,
+                                            isPassword: true,
+                                            isPasswordVisible:
+                                                _isPasswordVisible,
+                                            onTogglePassword: () {
+                                              setState(() {
+                                                _isPasswordVisible =
+                                                    !_isPasswordVisible;
+                                              });
+                                            },
+                                            validator: (value) {
+                                              if (value == null ||
+                                                  value.isEmpty) {
+                                                return 'Please enter your password';
+                                              }
+                                              if (value.length < 6) {
+                                                return 'Password must be at least 6 characters';
+                                              }
+                                              return null;
+                                            },
+                                          ),
+
+                                          // Confirm password field (only for register) with animation
+                                          AnimatedSwitcher(
+                                            duration: const Duration(
+                                              milliseconds: 300,
+                                            ),
+                                            transitionBuilder:
+                                                (
+                                                  Widget child,
+                                                  Animation<double> animation,
+                                                ) {
+                                                  return FadeTransition(
+                                                    opacity: animation,
+                                                    child: SizeTransition(
+                                                      sizeFactor: animation,
+                                                      axisAlignment: -1.0,
+                                                      child: child,
+                                                    ),
+                                                  );
+                                                },
+                                            child: !widget.isLogin
+                                                ? Column(
+                                                    key: const ValueKey(
+                                                      'confirm_password',
+                                                    ),
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .stretch,
+                                                    children: [
+                                                      const SizedBox(
+                                                        height: 20,
+                                                      ),
+                                                      _buildTextField(
+                                                        controller:
+                                                            _confirmPasswordController,
+                                                        label:
+                                                            'Confirm Password',
+                                                        hint:
+                                                            'Confirm your password',
+                                                        icon:
+                                                            Icons.lock_outline,
+                                                        isPassword: true,
+                                                        isPasswordVisible:
+                                                            _isConfirmPasswordVisible,
+                                                        onTogglePassword: () {
+                                                          setState(() {
+                                                            _isConfirmPasswordVisible =
+                                                                !_isConfirmPasswordVisible;
+                                                          });
+                                                        },
+                                                        validator: (value) {
+                                                          if (value == null ||
+                                                              value.isEmpty) {
+                                                            return 'Please confirm your password';
+                                                          }
+                                                          if (value !=
+                                                              _passwordController
+                                                                  .text) {
+                                                            return 'Passwords do not match';
+                                                          }
+                                                          return null;
+                                                        },
+                                                      ),
+                                                    ],
+                                                  )
+                                                : const SizedBox.shrink(
+                                                    key: ValueKey(
+                                                      'no_confirm_password',
+                                                    ),
                                                   ),
-                                              child: Text(
-                                                'or',
+                                          ),
+
+                                          const SizedBox(height: 32),
+
+                                          // Submit button with inline loading
+                                          Obx(() {
+                                            final bool isLoading =
+                                                authController.isLoading.value;
+                                            return GestureDetector(
+                                              onTap: isLoading
+                                                  ? null
+                                                  : _handleSubmit,
+                                              child: AnimatedContainer(
+                                                duration: const Duration(
+                                                  milliseconds: 200,
+                                                ),
+                                                width: double.infinity,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 16,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: isLoading
+                                                      ? Colors.grey[400]
+                                                      : Colors.black87,
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  border: Border.all(
+                                                    color: isLoading
+                                                        ? Colors.grey[500]!
+                                                        : Colors.black87,
+                                                  ),
+                                                ),
+                                                child: Center(
+                                                  child: isLoading
+                                                      ? Row(
+                                                          mainAxisAlignment:
+                                                              MainAxisAlignment
+                                                                  .center,
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
+                                                          children: const [
+                                                            SizedBox(
+                                                              width: 18,
+                                                              height: 18,
+                                                              child: CircularProgressIndicator(
+                                                                strokeWidth: 2,
+                                                                valueColor:
+                                                                    AlwaysStoppedAnimation<
+                                                                      Color
+                                                                    >(
+                                                                      Colors
+                                                                          .white,
+                                                                    ),
+                                                              ),
+                                                            ),
+                                                            SizedBox(width: 10),
+                                                            Text(
+                                                              'Iniciando sesión...',
+                                                              style: TextStyle(
+                                                                fontFamily:
+                                                                    'Poppins',
+                                                                fontSize: 16,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                                color: Colors
+                                                                    .white,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        )
+                                                      : Text(
+                                                          widget.isLogin
+                                                              ? 'Iniciar sesión'
+                                                              : 'Crear cuenta',
+                                                          style:
+                                                              const TextStyle(
+                                                                fontFamily:
+                                                                    'Poppins',
+                                                                fontSize: 16,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                                color: Colors
+                                                                    .white,
+                                                              ),
+                                                        ),
+                                                ),
+                                              ),
+                                            );
+                                          }),
+
+                                          const SizedBox(height: 20),
+
+                                          // Divider
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Divider(
+                                                  color: Colors.grey[300],
+                                                ),
+                                              ),
+                                              Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 16,
+                                                    ),
+                                                child: Text(
+                                                  'or',
+                                                  style: TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontSize: 14,
+                                                    color: Colors.grey[600],
+                                                  ),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                child: Divider(
+                                                  color: Colors.grey[300],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+
+                                          const SizedBox(height: 20),
+
+                                          // Google login button (disabled while loading)
+                                          Obx(() {
+                                            final bool isLoading =
+                                                authController.isLoading.value;
+                                            return GestureDetector(
+                                              onTap: isLoading
+                                                  ? null
+                                                  : _handleGoogleAuth,
+                                              child: Opacity(
+                                                opacity: isLoading ? 0.6 : 1.0,
+                                                child: Container(
+                                                  width: double.infinity,
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        vertical: 16,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                    border: Border.all(
+                                                      color: Colors.black87,
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.g_mobiledata,
+                                                        color: Colors.red[600],
+                                                        size: 24,
+                                                      ),
+                                                      const SizedBox(width: 12),
+                                                      const Text(
+                                                        'Continuar con Google',
+                                                        style: TextStyle(
+                                                          fontFamily: 'Poppins',
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                          color: Colors.black87,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          }),
+
+                                          const SizedBox(height: 24),
+
+                                          // Switch between login/register
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Text(
+                                                widget.isLogin
+                                                    ? "Don't have an account? "
+                                                    : "Already have an account? ",
                                                 style: TextStyle(
                                                   fontFamily: 'Poppins',
                                                   fontSize: 14,
                                                   color: Colors.grey[600],
                                                 ),
                                               ),
-                                            ),
-                                            Expanded(
-                                              child: Divider(
-                                                color: Colors.grey[300],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-
-                                        const SizedBox(height: 20),
-
-                                        // Google login button
-                                        GestureDetector(
-                                          onTap: _handleGoogleAuth,
-                                          child: Container(
-                                            width: double.infinity,
-                                            padding: const EdgeInsets.symmetric(
-                                              vertical: 16,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              border: Border.all(
-                                                color: Colors.black87,
-                                              ),
-                                            ),
-                                            child: Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                Icon(
-                                                  Icons.g_mobiledata,
-                                                  color: Colors.red[600],
-                                                  size: 24,
-                                                ),
-                                                const SizedBox(width: 12),
-                                                Text(
-                                                  'Continue with Google',
+                                              GestureDetector(
+                                                onTap: () {
+                                                  // Use the callback to switch between login/register
+                                                  widget.onToggleMode?.call();
+                                                },
+                                                child: Text(
+                                                  widget.isLogin
+                                                      ? 'Sign Up'
+                                                      : 'Sign In',
                                                   style: const TextStyle(
                                                     fontFamily: 'Poppins',
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.w500,
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w600,
                                                     color: Colors.black87,
                                                   ),
                                                 ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-
-                                        const SizedBox(height: 24),
-
-                                        // Switch between login/register
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Text(
-                                              widget.isLogin
-                                                  ? "Don't have an account? "
-                                                  : "Already have an account? ",
-                                              style: TextStyle(
-                                                fontFamily: 'Poppins',
-                                                fontSize: 14,
-                                                color: Colors.grey[600],
                                               ),
-                                            ),
-                                            GestureDetector(
-                                              onTap: () {
-                                                // Use the callback to switch between login/register
-                                                widget.onToggleMode?.call();
-                                              },
-                                              child: Text(
-                                                widget.isLogin
-                                                    ? 'Sign Up'
-                                                    : 'Sign In',
-                                                style: const TextStyle(
-                                                  fontFamily: 'Poppins',
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Colors.black87,
+                                            ],
+                                          ),
+
+                                          // Forgot password (only for login)
+                                          if (widget.isLogin) ...[
+                                            const SizedBox(height: 16),
+                                            Center(
+                                              child: GestureDetector(
+                                                onTap: _handleForgotPassword,
+                                                child: Text(
+                                                  'Forgot Password?',
+                                                  style: TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: Colors.blue[600],
+                                                  ),
                                                 ),
                                               ),
                                             ),
                                           ],
-                                        ),
-
-                                        // Forgot password (only for login)
-                                        if (widget.isLogin) ...[
-                                          const SizedBox(height: 16),
-                                          Center(
-                                            child: GestureDetector(
-                                              onTap: _handleForgotPassword,
-                                              child: Text(
-                                                'Forgot Password?',
-                                                style: TextStyle(
-                                                  fontFamily: 'Poppins',
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: Colors.blue[600],
-                                                ),
-                                              ),
-                                            ),
-                                          ),
                                         ],
-                                      ],
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
 
-                              const SizedBox(height: 20),
-                            ],
+                                const SizedBox(height: 20),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-            ],
-          ),
+          ],
         ),
-      );
-    });
+      ),
+    );
   }
 
   Widget _buildTextField({
@@ -718,15 +820,19 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
       } catch (e) {
         if (mounted) {
           // Check if it's a "user already exists" error
-          final bool isUserExistsError = e.toString().contains('User already registered');
-          
+          final bool isUserExistsError = e.toString().contains(
+            'User already registered',
+          );
+
           await _showErrorDialog(
             title: widget.isLogin ? 'Login Failed' : 'Registration Failed',
             message: _getErrorMessage(e.toString()),
           );
-          
+
           // If user already exists and we're in register mode, switch to login
-          if (isUserExistsError && !widget.isLogin && widget.onToggleMode != null) {
+          if (isUserExistsError &&
+              !widget.isLogin &&
+              widget.onToggleMode != null) {
             widget.onToggleMode!();
           }
         }
@@ -779,7 +885,8 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
     if (_emailController.text.isEmpty) {
       _showErrorDialog(
         title: 'Email Required',
-        message: 'Please enter your email address first to reset your password.',
+        message:
+            'Please enter your email address first to reset your password.',
       );
       return;
     }
@@ -877,27 +984,30 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
 
   String _getErrorMessage(String error) {
     if (error.contains('Invalid login credentials')) {
-      return 'Invalid email or password. Please check your credentials and try again.';
+      return 'Usuario o contraseña incorrectos. Verifica tus datos e inténtalo de nuevo.';
     } else if (error.contains('User already registered')) {
-      return 'An account with this email already exists. Please sign in instead or use a different email.';
+      return 'Ya existe una cuenta con este correo. Inicia sesión o usa otro correo.';
     } else if (error.contains('Password should be at least')) {
-      return 'Password must be at least 6 characters long. Please choose a stronger password.';
+      return 'La contraseña debe tener al menos 6 caracteres.';
     } else if (error.contains('Invalid email')) {
-      return 'Please enter a valid email address.';
+      return 'Ingresa un correo electrónico válido.';
     } else if (error.contains('Email not confirmed')) {
-      return 'Please check your email and confirm your account before signing in.';
+      return 'Confirma tu correo antes de iniciar sesión. Revisa tu bandeja de entrada.';
     } else if (error.contains('Too many requests')) {
-      return 'Too many attempts. Please wait a few minutes and try again.';
+      return 'Demasiados intentos. Espera unos minutos y vuelve a intentar.';
     } else if (error.contains('Email rate limit exceeded')) {
-      return 'Too many password reset requests. Please wait a few minutes before trying again.';
+      return 'Demasiadas solicitudes de restablecimiento. Espera unos minutos antes de intentar de nuevo.';
     } else if (error.contains('User not found')) {
-      return 'No account found with this email. Please check your email or create a new account.';
+      return 'No encontramos una cuenta con ese correo. Verifica o crea una nueva cuenta.';
     } else {
-      return 'An error occurred. Please try again or contact support if the problem persists.';
+      return 'Ocurrió un error. Inténtalo nuevamente o contacta soporte si persiste.';
     }
   }
 
-  Future<void> _showErrorDialog({required String title, required String message}) async {
+  Future<void> _showErrorDialog({
+    required String title,
+    required String message,
+  }) async {
     return showDialog(
       context: context,
       barrierDismissible: true,
@@ -907,12 +1017,10 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
         builder: (context, value, child) {
+          final double clamped = value.clamp(0.0, 1.0);
           return Transform.scale(
-            scale: 0.8 + (0.2 * value),
-            child: Opacity(
-              opacity: value,
-              child: child,
-            ),
+            scale: 0.8 + (0.2 * clamped),
+            child: Opacity(opacity: clamped, child: child),
           );
         },
         child: Dialog(
@@ -965,9 +1073,9 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                       );
                     },
                   ),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // Title
                   Text(
                     title,
@@ -979,9 +1087,9 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  
+
                   const SizedBox(height: 12),
-                  
+
                   // Message
                   Text(
                     message,
@@ -993,21 +1101,19 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  
+
                   const SizedBox(height: 28),
-                  
+
                   // Close Button with animation
                   TweenAnimationBuilder<double>(
                     tween: Tween(begin: 0.0, end: 1.0),
                     duration: const Duration(milliseconds: 400),
                     curve: Curves.easeOutBack,
                     builder: (context, value, child) {
+                      final double clamped = value.clamp(0.0, 1.0);
                       return Transform.translate(
-                        offset: Offset(0, 20 * (1 - value)),
-                        child: Opacity(
-                          opacity: value,
-                          child: child,
-                        ),
+                        offset: Offset(0, 20 * (1 - clamped)),
+                        child: Opacity(opacity: clamped, child: child),
                       );
                     },
                     child: GestureDetector(

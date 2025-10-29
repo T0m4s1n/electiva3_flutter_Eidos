@@ -515,7 +515,7 @@ class ChatController extends GetxController {
 
       // Set request body
       final Map<String, dynamic> requestBody = {
-        'model': 'gpt-4o-mini',
+        'model': HiveStorageService.loadModel(),
         'messages': messages,
         'max_tokens': 1000,
         'temperature': 0.7,
@@ -724,7 +724,7 @@ class ChatController extends GetxController {
       final ConversationLocal conversation =
           await ChatService.createConversation(
             title: 'Document Editor',
-            model: 'gpt-4o-mini',
+            model: HiveStorageService.loadModel(),
           );
 
       debugPrint('Created new document conversation: ${conversation.id}');
@@ -898,7 +898,7 @@ Keep it concise, relevant, and focused on the specific document type requested.'
       request.headers.set('User-Agent', 'Eidos-Chat-App/1.0');
 
       final Map<String, dynamic> requestBody = {
-        'model': 'gpt-4o-mini',
+        'model': HiveStorageService.loadModel(),
         'messages': messages,
         'max_tokens': 200,
         'temperature': 0.7,
@@ -1002,7 +1002,7 @@ Make it comprehensive and ready to use with proper markdown formatting.''',
       request.headers.set('User-Agent', 'Eidos-Chat-App/1.0');
 
       final Map<String, dynamic> requestBody = {
-        'model': 'gpt-4o-mini',
+        'model': HiveStorageService.loadModel(),
         'messages': messages,
         'max_tokens': 2000,
         'temperature': 0.7,

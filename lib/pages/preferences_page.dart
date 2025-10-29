@@ -106,11 +106,7 @@ class PreferencesPage extends StatelessWidget {
                       const SizedBox(height: 32),
 
                       // More Section
-                      _buildSectionHeader(
-                        context,
-                        'Más',
-                        Icons.more_horiz,
-                      ),
+                      _buildSectionHeader(context, 'Más', Icons.more_horiz),
                       const SizedBox(height: 16),
                       _buildMoreCard(context),
                     ],
@@ -192,9 +188,15 @@ class PreferencesPage extends StatelessWidget {
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF2C2C2C) : Colors.grey[100],
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: isDark ? Colors.grey[600]! : Colors.black87),
+              border: Border.all(
+                color: isDark ? Colors.grey[600]! : Colors.black87,
+              ),
             ),
-            child: Icon(icon, color: Theme.of(context).iconTheme.color, size: 20),
+            child: Icon(
+              icon,
+              color: Theme.of(context).iconTheme.color,
+              size: 20,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -430,8 +432,13 @@ class PreferencesPage extends StatelessWidget {
               items: const [
                 DropdownMenuItem<String>(
                   value: 'gpt-4o-mini',
-                  child: Text('gpt-4o-mini'),
+                  child: Text('gpt-4o-mini (actual)'),
                 ),
+                DropdownMenuItem<String>(
+                  value: 'gpt-4o',
+                  child: Text('gpt-4o'),
+                ),
+                DropdownMenuItem<String>(value: 'gpt-5', child: Text('gpt-5')),
               ],
               onChanged: (String? value) {
                 if (value != null) {
