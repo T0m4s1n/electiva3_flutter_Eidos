@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:get/get.dart';
 import '../controllers/theme_controller.dart';
+import '../routes/app_routes.dart';
 
 class AnimatedHeader extends StatefulWidget {
   final VoidCallback? onLogin;
@@ -14,6 +15,7 @@ class AnimatedHeader extends StatefulWidget {
   final VoidCallback? onEditProfile;
   final VoidCallback? onPreferences;
   final ValueChanged<bool>? onMenuStateChanged;
+  final ValueChanged<String>? onOpenConversation; // open chat by id
 
   const AnimatedHeader({
     super.key,
@@ -27,6 +29,7 @@ class AnimatedHeader extends StatefulWidget {
     this.onEditProfile,
     this.onPreferences,
     this.onMenuStateChanged,
+    this.onOpenConversation,
   });
 
   @override
@@ -91,6 +94,9 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
     _slideController.dispose();
     super.dispose();
   }
+
+  // Public method to allow parent to close the menu
+  void closeMenuExternal() => _closeMenu();
 
   void _toggleMenu() {
     setState(() {
@@ -400,6 +406,7 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
+                                  // (Search moved to HomePage above conversations list)
                                   // Account section
                                   Column(
                                     crossAxisAlignment:
@@ -549,6 +556,24 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                     },
                                     isPrimary: true,
                                   ),
+
+                                  const SizedBox(height: 24),
+
+                                  // Tools navigation
+                                  _buildSkeletonButton(
+                                    icon: Icons.archive_outlined,
+                                    text: 'Chat Archive',
+                                    onTap: () {
+                                      _closeMenu();
+                                      Future.delayed(const Duration(milliseconds: 150), () {
+                                        Get.toNamed(AppRoutes.archive);
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  // (Documents and Analytics moved near chat list search bar)
+                                  const SizedBox(height: 12),
+                                  // (Advanced Settings, Notifications, Feedback moved to Preferences page)
                                 ],
                               ),
                             ),

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../services/auth_service.dart';
+import 'animated_icon_background.dart';
+import 'dart:ui' as ui;
+import 'package:lottie/lottie.dart';
 
 class EditProfileView extends StatefulWidget {
   final String currentName;
@@ -33,11 +36,17 @@ class _EditProfileViewState extends State<EditProfileView>
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _newPasswordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
 
   bool _isLoading = false;
   String _profilePicUrl = '';
   File? _selectedImage;
   final ImagePicker _picker = ImagePicker();
+  Color? _selectedAvatarColor;
+  bool _isChangingPassword = false;
+  bool _isNewPasswordVisible = false;
+  bool _isConfirmPasswordVisible = false;
 
   @override
   void initState() {
@@ -69,6 +78,20 @@ class _EditProfileViewState extends State<EditProfileView>
 
     _fadeController.forward();
     _slideController.forward();
+
+    // Load current avatar url so the real profile picture shows up
+    _loadCurrentAvatar();
+  }
+
+  Future<void> _loadCurrentAvatar() async {
+    try {
+      final profile = await AuthService.getUserProfile();
+      if (mounted && profile != null) {
+        setState(() {
+          _profilePicUrl = profile['avatar_url'] ?? '';
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -77,6 +100,8 @@ class _EditProfileViewState extends State<EditProfileView>
     _slideController.dispose();
     _nameController.dispose();
     _emailController.dispose();
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -85,8 +110,13 @@ class _EditProfileViewState extends State<EditProfileView>
     return FadeTransition(
       opacity: _fadeAnimation,
       child: Scaffold(
-        backgroundColor: Colors.white,
-        body: SafeArea(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: Stack(
+          children: [
+            const Positioned.fill(
+              child: AuthIconBackground(),
+            ),
+            SafeArea(
           child: SingleChildScrollView(
             child: ConstrainedBox(
               constraints: BoxConstraints(
@@ -166,7 +196,7 @@ class _EditProfileViewState extends State<EditProfileView>
                                           width: 100,
                                           height: 100,
                                           decoration: BoxDecoration(
-                                            color: Colors.grey[200],
+                                            color: _selectedAvatarColor ?? Colors.grey[200],
                                             borderRadius: BorderRadius.circular(
                                               50,
                                             ),
@@ -227,14 +257,14 @@ class _EditProfileViewState extends State<EditProfileView>
                                                       fontSize: 36,
                                                       fontWeight:
                                                           FontWeight.bold,
-                                                      color: Colors.black87,
+                                                      color: Colors.white,
                                                     ),
                                                   ),
                                                 )
                                               : const Icon(
                                                   Icons.person,
                                                   size: 50,
-                                                  color: Colors.grey,
+                                                  color: Colors.white,
                                                 ),
                                         ),
                                       ),
@@ -291,6 +321,132 @@ class _EditProfileViewState extends State<EditProfileView>
                                     }
                                     return null;
                                   },
+                                ),
+
+                                const SizedBox(height: 20),
+
+                                // Password masked row and change toggle
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 250),
+                                  transitionBuilder: (child, animation) => SizeTransition(
+                                    sizeFactor: animation,
+                                    axisAlignment: -1.0,
+                                    child: FadeTransition(opacity: animation, child: child),
+                                  ),
+                                  child: !_isChangingPassword
+                                      ? Column(
+                                          key: const ValueKey('masked_password'),
+                                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                                          children: [
+                                            const Text(
+                                              'Password',
+                                              style: TextStyle(
+                                                fontFamily: 'Poppins',
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w500,
+                                                color: Colors.black87,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(color: Colors.black87),
+                                              ),
+                                              child: Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                children: const [
+                                                  Text(
+                                                    '***********',
+                                                    style: TextStyle(
+                                                      fontFamily: 'Poppins',
+                                                      fontSize: 16,
+                                                      color: Colors.black87,
+                                                    ),
+                                                  ),
+                                                  Icon(Icons.visibility_off, size: 20, color: Colors.black87),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: GestureDetector(
+                                                onTap: () {
+                                                  setState(() {
+                                                    _isChangingPassword = true;
+                                                  });
+                                                },
+                                                child: Text(
+                                                  'Change Password',
+                                                  style: TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Colors.blue[600],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : Column(
+                                          key: const ValueKey('change_password_fields'),
+                                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                                          children: [
+                                            _buildTextField(
+                                              controller: _newPasswordController,
+                                              label: 'New Password',
+                                              hint: 'Enter new password',
+                                              icon: Icons.lock_outline,
+                                              keyboardType: TextInputType.visiblePassword,
+                                              isPassword: true,
+                                              isPasswordVisible: _isNewPasswordVisible,
+                                              onTogglePassword: () {
+                                                setState(() {
+                                                  _isNewPasswordVisible = !_isNewPasswordVisible;
+                                                });
+                                              },
+                                              validator: (value) {
+                                                if (!_isChangingPassword) return null;
+                                                if (value == null || value.isEmpty) {
+                                                  return 'Please enter a new password';
+                                                }
+                                                if (value.length < 6) {
+                                                  return 'Password must be at least 6 characters';
+                                                }
+                                                return null;
+                                              },
+                                            ),
+                                            const SizedBox(height: 12),
+                                            _buildTextField(
+                                              controller: _confirmPasswordController,
+                                              label: 'Confirm Password',
+                                              hint: 'Re-enter new password',
+                                              icon: Icons.lock_reset,
+                                              keyboardType: TextInputType.visiblePassword,
+                                              isPassword: true,
+                                              isPasswordVisible: _isConfirmPasswordVisible,
+                                              onTogglePassword: () {
+                                                setState(() {
+                                                  _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
+                                                });
+                                              },
+                                              validator: (value) {
+                                                if (!_isChangingPassword) return null;
+                                                if (value == null || value.isEmpty) {
+                                                  return 'Please confirm your new password';
+                                                }
+                                                if (value != _newPasswordController.text) {
+                                                  return 'Passwords do not match';
+                                                }
+                                                return null;
+                                              },
+                                            ),
+                                          ],
+                                        ),
                                 ),
 
                                 const SizedBox(height: 20),
@@ -377,6 +533,8 @@ class _EditProfileViewState extends State<EditProfileView>
               ),
             ),
           ),
+            ),
+          ],
         ),
       ),
     );
@@ -390,6 +548,9 @@ class _EditProfileViewState extends State<EditProfileView>
     TextInputType? keyboardType,
     int maxLines = 1,
     String? Function(String?)? validator,
+    bool isPassword = false,
+    bool isPasswordVisible = false,
+    VoidCallback? onTogglePassword,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -407,7 +568,8 @@ class _EditProfileViewState extends State<EditProfileView>
         TextFormField(
           controller: controller,
           keyboardType: keyboardType,
-          maxLines: maxLines,
+          maxLines: isPassword ? 1 : maxLines,
+          obscureText: isPassword && !isPasswordVisible,
           style: const TextStyle(fontFamily: 'Poppins', fontSize: 16),
           decoration: InputDecoration(
             hintText: hint,
@@ -416,6 +578,16 @@ class _EditProfileViewState extends State<EditProfileView>
               color: Colors.grey[500],
             ),
             prefixIcon: Icon(icon, color: Colors.grey[600], size: 20),
+            suffixIcon: isPassword
+                ? GestureDetector(
+                    onTap: onTogglePassword,
+                    child: Icon(
+                      isPasswordVisible ? Icons.visibility_off : Icons.visibility,
+                      color: Colors.grey[600],
+                      size: 20,
+                    ),
+                  )
+                : null,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: Colors.grey[300]!),
@@ -464,6 +636,28 @@ class _EditProfileViewState extends State<EditProfileView>
               ),
             ),
             const SizedBox(height: 20),
+            // Current avatar preview
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.black87),
+              ),
+              child: _selectedImage != null
+                  ? ClipOval(child: Image.file(_selectedImage!, fit: BoxFit.cover))
+                  : (_profilePicUrl.isNotEmpty
+                      ? ClipOval(
+                          child: Image.network(
+                            _profilePicUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => const Icon(Icons.person, color: Colors.grey),
+                          ),
+                        )
+                      : const Icon(Icons.person, color: Colors.grey)),
+            ),
+            const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -483,6 +677,14 @@ class _EditProfileViewState extends State<EditProfileView>
                     _pickImage(ImageSource.gallery);
                   },
                 ),
+                _buildImageOption(
+                  icon: Icons.palette_outlined,
+                  label: 'Presets',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _openPresetPicker();
+                  },
+                ),
                 if (_selectedImage != null || _profilePicUrl.isNotEmpty)
                   _buildImageOption(
                     icon: Icons.delete,
@@ -493,11 +695,12 @@ class _EditProfileViewState extends State<EditProfileView>
                       try {
                         await AuthService.deleteProfilePicture();
                         await AuthService.updateUserProfile(avatarUrl: '');
-                      setState(() {
-                        _selectedImage = null;
-                        _profilePicUrl = '';
-                      });
-                      if (mounted) {
+                        setState(() {
+                          _selectedImage = null;
+                          _profilePicUrl = '';
+                          _selectedAvatarColor = null;
+                        });
+                        if (mounted) {
                           scaffoldMessenger.showSnackBar(
                             const SnackBar(
                               content: Text(
@@ -540,6 +743,126 @@ class _EditProfileViewState extends State<EditProfileView>
         ),
       ),
     );
+  }
+
+  void _openPresetPicker() {
+    final List<Color> colors = [
+      const Color(0xFF1F2937),
+      const Color(0xFF3B82F6),
+      const Color(0xFF10B981),
+      const Color(0xFFF59E0B),
+      const Color(0xFFEF4444),
+      const Color(0xFF8B5CF6),
+      const Color(0xFF14B8A6),
+      const Color(0xFF6B7280),
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Choose a preset color',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: colors.map((c) {
+                return GestureDetector(
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _applyColorPreset(c);
+                  },
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: c,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.black87),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _applyColorPreset(Color color) async {
+    setState(() {
+      _selectedAvatarColor = color;
+    });
+    // Generate PNG with initial on chosen color and treat like picked image
+    final initial = (widget.currentName.isNotEmpty
+            ? widget.currentName[0]
+            : (widget.currentEmail.isNotEmpty ? widget.currentEmail[0] : 'U'))
+        .toUpperCase();
+    final file = await _generateAvatarPng(initial, color);
+    setState(() {
+      _selectedImage = file;
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Preset applied! Don\'t forget to save your changes.',
+            style: TextStyle(fontFamily: 'Poppins'),
+          ),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<File> _generateAvatarPng(String initial, Color bgColor) async {
+    const double size = 256;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final paint = Paint()..color = bgColor;
+    // Draw circle background
+    canvas.drawCircle(const Offset(size / 2, size / 2), size / 2, paint);
+    // Draw initial
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: initial,
+        style: const TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 120,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final offset = Offset(
+      (size - textPainter.width) / 2,
+      (size - textPainter.height) / 2,
+    );
+    textPainter.paint(canvas, offset);
+
+    final picture = recorder.endRecording();
+    final img = await picture.toImage(size.toInt(), size.toInt());
+    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+    final bytes = byteData!.buffer.asUint8List();
+
+    final tempDir = Directory.systemTemp;
+    final file = File('${tempDir.path}/avatar_${DateTime.now().millisecondsSinceEpoch}.png');
+    await file.writeAsBytes(bytes, flush: true);
+    return file;
   }
 
   Widget _buildImageOption({
@@ -624,6 +947,8 @@ class _EditProfileViewState extends State<EditProfileView>
     }
   }
 
+  
+
   void _handleSave() async {
     if (_formKey.currentState!.validate()) {
       setState(() {
@@ -631,6 +956,27 @@ class _EditProfileViewState extends State<EditProfileView>
       });
 
       try {
+        // If changing password, validate and update password first
+        if (_isChangingPassword) {
+          if (_newPasswordController.text.isEmpty ||
+              _newPasswordController.text.length < 6 ||
+              _newPasswordController.text != _confirmPasswordController.text) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Please provide matching passwords (min 6 chars).',
+                    style: TextStyle(fontFamily: 'Poppins'),
+                  ),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+            return;
+          }
+          await AuthService.updatePassword(_newPasswordController.text);
+        }
+
         // Upload profile picture to Supabase Storage if _selectedImage is not null
         String? avatarUrl;
         if (_selectedImage != null) {
@@ -666,6 +1012,15 @@ class _EditProfileViewState extends State<EditProfileView>
               _emailController.text.trim(),
               '',
             );
+          }
+
+          // Reset password fields state if changed
+          if (_isChangingPassword) {
+            setState(() {
+              _isChangingPassword = false;
+            });
+            _newPasswordController.clear();
+            _confirmPasswordController.clear();
           }
 
           // Navigate back
@@ -704,69 +1059,113 @@ class _EditProfileViewState extends State<EditProfileView>
   void _handleDeleteAccount() {
     showDialog(
       context: context,
+      barrierDismissible: true,
       builder: (context) => AlertDialog(
-        title: const Text(
-          'Delete Account',
-          style: TextStyle(fontFamily: 'Poppins'),
-        ),
-        content: const Text(
-          'Are you sure you want to delete your account? This action cannot be undone.',
-          style: TextStyle(fontFamily: 'Poppins'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(fontFamily: 'Poppins'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Alert animation
+            Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.06),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: SizedBox(
+                  width: 90,
+                  height: 90,
+                  child: Lottie.asset(
+                    'assets/fonts/svgs/alert.json',
+                    fit: BoxFit.contain,
+                    repeat: false,
+                  ),
+                ),
+              ),
             ),
-          ),
-          TextButton(
-            onPressed: () async {
-              final navigator = Navigator.of(context);
-              final scaffoldMessenger = ScaffoldMessenger.of(context);
-
-              navigator.pop();
-
-              // Show loading dialog
-              showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder: (context) =>
-                    const Center(child: CircularProgressIndicator()),
-              );
-
-              try {
-                await AuthService.deleteAccount();
-                if (mounted) {
-                  navigator.pop(); // Close loading dialog
-                  widget.onDeleteAccount?.call();
-                }
-              } catch (e) {
-                if (mounted) {
-                  navigator.pop(); // Close loading dialog
-                  scaffoldMessenger.showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Failed to delete account: ${e.toString()}',
-                        style: const TextStyle(fontFamily: 'Poppins'),
-                      ),
-                      backgroundColor: Colors.red,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+            const SizedBox(height: 16),
+            const Text(
+              'Delete Account',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.red,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'This will permanently delete your account and data. This action cannot be undone.',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+                color: Colors.grey[700],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.black87),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                  );
-                }
-              }
-            },
-            child: const Text(
-              'Delete',
-              style: TextStyle(fontFamily: 'Poppins', color: Colors.red),
+                    child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins', color: Colors.black87)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final navigator = Navigator.of(context);
+                      final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+                      navigator.pop();
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (context) => const Center(child: CircularProgressIndicator()),
+                      );
+                      try {
+                        await AuthService.deleteAccount();
+                        if (mounted) {
+                          navigator.pop();
+                          widget.onDeleteAccount?.call();
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          navigator.pop();
+                          scaffoldMessenger.showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to delete account: ${e.toString()}', style: const TextStyle(fontFamily: 'Poppins')),
+                              backgroundColor: Colors.red,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text('Delete', style: TextStyle(fontFamily: 'Poppins', color: Colors.white)),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -13,6 +13,8 @@ import 'edit_profile_page.dart';
 import 'chat_page.dart';
 import 'onboarding_page.dart';
 import '../routes/app_routes.dart';
+import '../services/chat_service.dart';
+import '../models/chat_models.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -22,7 +24,8 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  bool _isHeaderMenuOpen = false;
+  final GlobalKey _headerKey = GlobalKey();
+  final TextEditingController _chatSearchController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +76,7 @@ class _HomePageState extends State<HomePage> {
                   // Custom animated header - only show when not in edit profile
                   if (!navController.showEditProfile.value)
                     AnimatedHeader(
+                      key: _headerKey,
                       isLoggedIn: authController.isLoggedIn.value,
                       userName: authController.userName.value,
                       userEmail: authController.userEmail.value,
@@ -88,11 +92,146 @@ class _HomePageState extends State<HomePage> {
                         final chatController = Get.find<ChatController>();
                         await chatController.startNewChat();
                       },
-                      onMenuStateChanged: (isOpen) {
-                        setState(() {
-                          _isHeaderMenuOpen = isOpen;
-                        });
+                      onMenuStateChanged: (_) {},
+                      onOpenConversation: (id) async {
+                        final chatController = Get.find<ChatController>();
+                        await chatController.loadConversation(id);
+                        navController.showChat();
+                        final state = _headerKey.currentState;
+                        try {
+                          // Close header menu if open
+                          // ignore: invalid_use_of_protected_member
+                          // Use dynamic call to access method
+                          // This is safe because we control the widget
+                          // and added the method in its State
+                          // ignore: avoid_dynamic_calls
+                          (state as dynamic).closeMenuExternal();
+                        } catch (_) {}
                       },
+                    ),
+
+                  // Search bar below header, above conversations list (only when showing list)
+                  if (!navController.showEditProfile.value &&
+                      !navController.showChatView.value)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: TextField(
+                        controller: _chatSearchController,
+                        decoration: InputDecoration(
+                          hintText: 'Search chats...',
+                          prefixIcon: const Icon(Icons.search, size: 18),
+                          filled: true,
+                          fillColor: Theme.of(context).brightness == Brightness.dark
+                              ? const Color(0xFF2C2C2C)
+                              : Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.grey[600]!
+                                  : Colors.black87,
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.grey[600]!
+                                  : Colors.black87,
+                            ),
+                          ),
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                        onSubmitted: (q) async {
+                          final List<ConversationLocal> convs =
+                              await ChatService.getConversations();
+                          final String query = q.trim().toLowerCase();
+                          ConversationLocal? match;
+                          for (final c in convs) {
+                            final title = (c.title ?? '').toLowerCase();
+                            if (title.contains(query)) {
+                              match = c;
+                              break;
+                            }
+                          }
+                          if (match != null) {
+                            final chatController = Get.find<ChatController>();
+                            await chatController.loadConversation(match.id);
+                            navController.showChat();
+                            final state = _headerKey.currentState;
+                            try {
+                              (state as dynamic).closeMenuExternal();
+                            } catch (_) {}
+                          }
+                        },
+                      ),
+                    ),
+
+                  // Quick actions below search (Documents / Analytics)
+                  if (!navController.showEditProfile.value &&
+                      !navController.showChatView.value)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => Get.toNamed(AppRoutes.documents),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? const Color(0xFF2C2C2C)
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Theme.of(context).brightness == Brightness.dark
+                                        ? Colors.grey[600]!
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.folder_copy_outlined, color: Theme.of(context).iconTheme.color, size: 18),
+                                    const SizedBox(width: 8),
+                                    const Text('Documents', style: TextStyle(fontFamily: 'Poppins', fontSize: 14)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => Get.toNamed(AppRoutes.analytics),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? const Color(0xFF2C2C2C)
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Theme.of(context).brightness == Brightness.dark
+                                        ? Colors.grey[600]!
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.analytics_outlined, color: Theme.of(context).iconTheme.color, size: 18),
+                                    const SizedBox(width: 8),
+                                    const Text('Analytics', style: TextStyle(fontFamily: 'Poppins', fontSize: 14)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
 
                   // Main content
@@ -110,23 +249,7 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
 
-              // Transparent overlay to close header menu when tapping outside
-              // Position it below the header (starting from ~80px down)
-              if (_isHeaderMenuOpen)
-                Positioned(
-                  top: 80,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _isHeaderMenuOpen = false;
-                      });
-                    },
-                    child: Container(color: Colors.transparent),
-                  ),
-                ),
+              // Removed transparent overlay that intercepted taps over the dropdown
 
               // Loading overlay
               Obx(() {

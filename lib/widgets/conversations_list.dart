@@ -110,6 +110,10 @@ class _ConversationsListState extends State<ConversationsList>
     try {
       await chatController.loadConversation(conversationId);
       navController.showChat();
+      // Ask HomePage header to close if open by toggling showChat again in next frame
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // Nothing else needed; HomePage listens to showChatView and will rebuild
+      });
     } catch (e) {
       debugPrint('Error opening conversation: $e');
     }
@@ -244,13 +248,23 @@ class _ConversationsListState extends State<ConversationsList>
           else if (conversations.isEmpty)
             _buildEmptyState()
           else
-            ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: conversations.length,
-              itemBuilder: (context, index) {
-                final conversation = conversations[index];
-                return _buildConversationCard(conversation);
+            RefreshIndicator(
+              displacement: 80,
+              onRefresh: () async {
+                // Navigate to archived chats when user pulls down from top
+                Get.toNamed('/archive');
+                // Delay to satisfy RefreshIndicator's future
+                await Future.delayed(const Duration(milliseconds: 400));
               },
+              child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                itemCount: conversations.length,
+                itemBuilder: (context, index) {
+                  final conversation = conversations[index];
+                  return _buildConversationCard(conversation);
+                },
+              ),
             ),
           
           // Floating action button to sync

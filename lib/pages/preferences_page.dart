@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../controllers/preferences_controller.dart';
 import '../controllers/theme_controller.dart';
 import '../models/chat_rule.dart';
+import '../routes/app_routes.dart';
 
 class PreferencesPage extends StatelessWidget {
   const PreferencesPage({super.key});
@@ -101,6 +102,17 @@ class PreferencesPage extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       _buildChatRulesCard(context, preferencesController),
+
+                      const SizedBox(height: 32),
+
+                      // More Section
+                      _buildSectionHeader(
+                        context,
+                        'Más',
+                        Icons.more_horiz,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildMoreCard(context),
                     ],
                   ),
                 ),
@@ -108,6 +120,110 @@ class PreferencesPage extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildMoreCard(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardTheme.color,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.grey[600]! : Colors.black87,
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          _buildNavTile(
+            context,
+            icon: Icons.tune_outlined,
+            title: 'Advanced Settings',
+            subtitle: 'Model options and behavior controls',
+            route: AppRoutes.advancedSettings,
+          ),
+          const Divider(height: 24),
+          _buildNavTile(
+            context,
+            icon: Icons.notifications_none,
+            title: 'Notifications',
+            subtitle: 'Choose what alerts you receive',
+            route: AppRoutes.notifications,
+          ),
+          const Divider(height: 24),
+          _buildNavTile(
+            context,
+            icon: Icons.support_agent,
+            title: 'Feedback & Support',
+            subtitle: 'Report issues or request features',
+            route: AppRoutes.feedback,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavTile(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String route,
+  }) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: () => Get.toNamed(route),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF2C2C2C) : Colors.grey[100],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: isDark ? Colors.grey[600]! : Colors.black87),
+            ),
+            child: Icon(icon, color: Theme.of(context).iconTheme.color, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.chevron_right, color: Theme.of(context).iconTheme.color),
+        ],
       ),
     );
   }

@@ -88,6 +88,16 @@ class AuthService {
     }
   }
 
+  // Update current user's password (requires active session)
+  static Future<void> updatePassword(String newPassword) async {
+    if (!isLoggedIn) throw Exception('User not logged in');
+    try {
+      await _supabase.auth.updateUser(UserAttributes(password: newPassword));
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   // Get user profile
   static Future<Map<String, dynamic>?> getUserProfile() async {
     if (!isLoggedIn) return null;
