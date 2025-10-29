@@ -61,8 +61,6 @@ class ChatController extends GetxController {
             model: HiveStorageService.loadModel(),
           );
 
-      debugPrint('Created new conversation: ${conversation.id}');
-
       // Verify the conversation was saved to the database
       final ConversationLocal? verifyConv = await ChatService.getConversation(
         conversation.id,
@@ -88,13 +86,8 @@ class ChatController extends GetxController {
 
       // Clear any existing messages
       messages.clear();
-
-      debugPrint(
-        'Chat initialized - ID: ${conversation.id}, Messages: ${messages.length}',
-      );
       debugPrint('=== Chat initialization complete ===');
     } catch (e) {
-      debugPrint('Error initializing chat: $e');
       _showErrorSnackbar('Error initializing chat');
     } finally {
       isLoading.value = false;
@@ -162,19 +155,11 @@ class ChatController extends GetxController {
       } else {
         // Regular chat mode
         // Add user message to the chat
-        debugPrint('=== Creating user message ===');
-        debugPrint('Conversation ID: ${currentConversationId.value}');
-        debugPrint('Message text: $messageText');
 
         final MessageLocal userMessage = await ChatService.createUserMessage(
           conversationId: currentConversationId.value,
           text: messageText,
         );
-
-        debugPrint('User message created with ID: ${userMessage.id}');
-        debugPrint('Message seq: ${userMessage.seq}');
-        debugPrint('Message role: ${userMessage.role}');
-        debugPrint('Message content: ${userMessage.content}');
 
         // Verify the message was saved to database
         await Future.delayed(
@@ -439,11 +424,6 @@ class ChatController extends GetxController {
           aiResponse == '0') {
         throw Exception('Invalid or empty response from AI');
       }
-
-      // Add AI response to chat and save to local database
-      debugPrint('=== Saving AI response to local database ===');
-      debugPrint('Conversation ID: ${currentConversationId.value}');
-      debugPrint('AI response length: ${aiResponse.length}');
 
       final MessageLocal aiMessage = await ChatService.createAssistantMessage(
         conversationId: currentConversationId.value,
