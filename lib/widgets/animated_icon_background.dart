@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 
 /// A widget that displays an animated background of floating icons
 /// Can be customized with different icon sets for different views
@@ -284,6 +285,97 @@ class DocumentIconBackground extends StatelessWidget {
       icons: _documentIcons,
       iconColor: isDark ? const Color(0xFF505050) : const Color(0xFF707070),
       iconCount: 60,
+    );
+  }
+}
+
+class AuthIconBackground extends StatelessWidget {
+  const AuthIconBackground({super.key});
+
+  static const List<IconData> _authIcons = [
+    // Security & Auth
+    Icons.lock_outlined,
+    Icons.vpn_key_outlined,
+    Icons.security_outlined,
+    Icons.fingerprint_outlined,
+    Icons.admin_panel_settings_outlined,
+    Icons.badge_outlined,
+    Icons.verified_user_outlined,
+    Icons.person_pin_outlined,
+    
+    // User & Profile
+    Icons.person_outline,
+    Icons.person_add_outlined,
+    Icons.account_circle_outlined,
+    Icons.people_outlined,
+    Icons.group_outlined,
+    Icons.contacts_outlined,
+    Icons.supervised_user_circle_outlined,
+    
+    // Access & Login
+    Icons.login_outlined,
+    Icons.logout_outlined,
+    Icons.how_to_reg_outlined,
+    Icons.perm_identity_outlined,
+    Icons.person_search_outlined,
+    Icons.person_add_alt_1_outlined,
+    
+    // Communication & Connect
+    Icons.link_outlined,
+    Icons.swap_horiz_outlined,
+    Icons.sync_outlined,
+    Icons.refresh_outlined,
+    Icons.connect_without_contact_outlined,
+    
+    // Technology
+    Icons.cloud_outlined,
+    Icons.storage_outlined,
+    Icons.backup_outlined,
+    Icons.restore_outlined,
+    Icons.data_object_outlined,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return AnimatedIconBackground(
+      icons: _authIcons,
+      iconColor: isDark ? const Color(0xFF505050) : const Color(0xFF707070),
+      iconCount: 60,
+    );
+  }
+}
+
+/// A widget that displays an animated pyramid background for the chat
+class ChatPyramidBackground extends StatelessWidget {
+  const ChatPyramidBackground({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: IgnorePointer(
+        child: Stack(
+          children: [
+            // Center pyramid animation with subtle opacity
+            Center(
+              child: Opacity(
+                opacity: isDark ? 0.04 : 0.06,
+                child: Lottie.asset(
+                  'assets/fonts/svgs/pyramid.json',
+                  width: 300,
+                  height: 300,
+                  fit: BoxFit.contain,
+                  repeat: true,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

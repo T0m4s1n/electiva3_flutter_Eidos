@@ -29,6 +29,7 @@ class PreferencesController extends GetxController {
   final Rx<AIPersonality> aiPersonality = AIPersonality.precise.obs;
   final RxBool isDarkMode = false.obs;
   final RxList<ChatRule> chatRules = <ChatRule>[].obs;
+  final RxString model = 'gpt-4o-mini'.obs;
 
   @override
   void onInit() {
@@ -45,12 +46,16 @@ class PreferencesController extends GetxController {
       // Load theme preference
       isDarkMode.value = HiveStorageService.loadThemeMode();
 
+      // Load model preference
+      model.value = HiveStorageService.loadModel();
+
       // Load chat rules
       chatRules.value = HiveStorageService.getAllChatRules();
 
       debugPrint('Preferences loaded successfully');
       debugPrint('AI Personality: ${aiPersonality.value.displayName}');
       debugPrint('Theme Mode: ${isDarkMode.value ? 'Dark' : 'Light'}');
+      debugPrint('Model: ${model.value}');
       debugPrint('Chat Rules loaded: ${chatRules.length}');
 
       // Log each rule for debugging
@@ -84,6 +89,17 @@ class PreferencesController extends GetxController {
       debugPrint('Theme mode updated: ${dark ? 'Dark' : 'Light'}');
     } catch (e) {
       debugPrint('Error saving theme preference: $e');
+    }
+  }
+
+  // Save model preference
+  Future<void> setModel(String newModel) async {
+    try {
+      model.value = newModel;
+      await HiveStorageService.saveModel(newModel);
+      debugPrint('Model updated: $newModel');
+    } catch (e) {
+      debugPrint('Error saving model preference: $e');
     }
   }
 

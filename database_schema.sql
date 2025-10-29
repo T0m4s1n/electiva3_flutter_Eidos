@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS public.conversations (
   title TEXT,
   model TEXT,
   summary TEXT,
+  context JSONB,
   is_archived BOOLEAN DEFAULT FALSE,
   last_message_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+import 'package:get/get.dart';
 import 'dart:async';
 import '../models/chat_models.dart';
+import '../controllers/auth_controller.dart';
 
 class MessageBubble extends StatefulWidget {
   final MessageLocal message;
@@ -23,7 +25,6 @@ class MessageBubble extends StatefulWidget {
 
 class _MessageBubbleState extends State<MessageBubble> {
   String _displayText = '';
-  bool _isTyping = false;
   Timer? _typingTimer;
   int _currentIndex = 0;
 
@@ -45,7 +46,6 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   void _startTypingAnimation() {
     final String fullText = _getMessageText();
-    _isTyping = true;
     _currentIndex = 0;
     _displayText = '';
     
@@ -54,11 +54,6 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   void _typeNextChar(String fullText) {
     if (_currentIndex >= fullText.length) {
-      if (mounted) {
-        setState(() {
-          _isTyping = false;
-        });
-      }
       return;
     }
 
@@ -69,7 +64,6 @@ class _MessageBubbleState extends State<MessageBubble> {
       _currentIndex++;
     });
 
-    // Calculate delay based on the character and position
     final Duration delay = _calculateTypingDelay(
       fullText,
       _currentIndex - 1,
@@ -88,30 +82,22 @@ class _MessageBubbleState extends State<MessageBubble> {
     final String char = text[index];
     final String nextChar = index + 1 < text.length ? text[index + 1] : '';
 
-    // Pause longer after punctuation
     if (char == '.' || char == '!' || char == '?') {
       return const Duration(milliseconds: 300);
     }
     if (char == ',' || char == ';' || char == ':') {
       return const Duration(milliseconds: 150);
     }
-    
-    // Pause after newlines
     if (char == '\n') {
       return const Duration(milliseconds: 200);
     }
-
-    // Longer pause after multiple spaces
     if (char == ' ' && nextChar == ' ') {
       return const Duration(milliseconds: 100);
     }
-
-    // Vary speed based on characters
     if (char == ' ') {
       return const Duration(milliseconds: 50);
     }
 
-    // Vary typing speed slightly for more realistic feel
     if (_isVowel(char)) {
       return Duration(milliseconds: 30 + (index % 10));
     } else if (char == char.toUpperCase() && char != 'I' && char != 'A') {
@@ -134,202 +120,277 @@ class _MessageBubbleState extends State<MessageBubble> {
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      child: Row(
-        mainAxisAlignment: widget.isUser
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!widget.isUser) ...[
-            // AI Avatar
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: isDark ? Colors.grey[800] : Colors.grey[200],
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isDark ? Colors.grey[600]! : Colors.black87,
-                ),
-              ),
-              child: Icon(
-                Icons.smart_toy,
-                color: Theme.of(context).iconTheme.color,
-                size: 18,
-              ),
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+      builder: (context, double value, child) {
+        // Clamp values to prevent overflow
+        final double clampedValue = value.clamp(0.0, 1.0);
+        
+        // Slide from appropriate side
+        final double offset = widget.isUser 
+            ? (clampedValue - 1.0) * 30 // Slide from right for user messages
+            : (1.0 - clampedValue) * 30; // Slide from left for AI messages
+        
+        return Transform.translate(
+          offset: Offset(offset, 0),
+          child: Transform.scale(
+            scale: 0.7 + (0.3 * clampedValue),
+            child: Opacity(
+              opacity: clampedValue,
+              child: child,
             ),
-            const SizedBox(width: 12),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+        child: Row(
+          mainAxisAlignment: widget.isUser
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // AI messages: Avatar on left
+            if (!widget.isUser) ...[
+              _buildAvatar(isDark),
+              const SizedBox(width: 12),
+              Flexible(
+                child: _buildMessageContent(isDark),
+              ),
+            ],
+            // User messages: Content on left, Avatar on right
+            if (widget.isUser) ...[
+              Flexible(
+                child: _buildMessageContent(isDark),
+              ),
+              const SizedBox(width: 12),
+              _buildAvatar(isDark),
+            ],
           ],
+        ),
+      ),
+    );
+  }
 
-          // Message content
-          Flexible(
-            child: GestureDetector(
-              onTap: widget.onTap,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: widget.isUser 
-                      ? (isDark ? Colors.white : Colors.black87)
-                      : (isDark ? const Color(0xFF2C2C2C) : Colors.grey[50]),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: widget.onTap != null && !widget.isUser 
-                      ? Colors.blue[700]! 
-                      : (isDark ? Colors.grey[600]! : Colors.black87),
-                    width: widget.onTap != null && !widget.isUser ? 2 : 1,
-                  ),
-                  boxShadow: widget.onTap != null && !widget.isUser
-                    ? [
-                        BoxShadow(
-                          color: Colors.blue.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ]
-                    : null,
+  Widget _buildAvatar(bool isDark) {
+    if (!widget.isUser) {
+      // AI Avatar
+      return Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: isDark ? Colors.grey[800] : Colors.grey[200],
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isDark ? Colors.grey[600]! : Colors.black87,
+            width: 1.5,
+          ),
+        ),
+        child: Icon(
+          Icons.smart_toy,
+          color: isDark ? Colors.white : Colors.black87,
+          size: 20,
+        ),
+      );
+    } else {
+      // User Avatar with profile picture
+      final AuthController authController = Get.find<AuthController>();
+      final String avatarUrl = authController.userAvatarUrl.value;
+      
+      return Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white : Colors.black87,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isDark ? Colors.white : Colors.black87,
+            width: 1.5,
+          ),
+        ),
+        child: avatarUrl.isNotEmpty
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Image.network(
+                  avatarUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Icon(
+                      Icons.person,
+                      color: isDark ? Colors.black87 : Colors.white,
+                      size: 20,
+                    );
+                  },
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (_shouldShowCreatingAnimation() && !widget.isUser)
-                      // Show creating animation
+              )
+            : Icon(
+                Icons.person,
+                color: isDark ? Colors.black87 : Colors.white,
+                size: 20,
+              ),
+      );
+    }
+  }
+
+  Widget _buildMessageContent(bool isDark) {
+    // Calculate max width to leave space for avatar (44px) + margins (32px)
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final double maxWidth = (screenWidth - 44 - 32) * 0.9;
+    
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: maxWidth,
+      ),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: widget.isUser 
+                ? (isDark ? Colors.white : Colors.black87)
+                : (isDark ? const Color(0xFF2C2C2C) : Colors.grey[50]),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: widget.onTap != null && !widget.isUser 
+                ? Colors.blue[700]! 
+                : (isDark ? Colors.grey[600]! : Colors.black87),
+              width: widget.onTap != null && !widget.isUser ? 2 : 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(widget.isUser ? 0.15 : 0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+                spreadRadius: 0,
+              ),
+              BoxShadow(
+                color: widget.isUser
+                    ? (isDark ? Colors.white.withOpacity(0.1) : Colors.black87.withOpacity(0.05))
+                    : (isDark ? Colors.grey.withOpacity(0.1) : Colors.grey.withOpacity(0.05)),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+                spreadRadius: -2,
+              ),
+              if (widget.onTap != null && !widget.isUser)
+                BoxShadow(
+                  color: Colors.blue.withOpacity(0.2),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                  spreadRadius: 0,
+                ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_shouldShowCreatingAnimation() && !widget.isUser)
+                // Show creating animation
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Column(
+                    children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(vertical: 20),
-                        child: Column(
-                          children: [
-                            Container(
-                              width: 150,
-                              height: 150,
-                              padding: const EdgeInsets.all(15),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).brightness == Brightness.dark
-                                    ? Colors.white.withOpacity(0.1)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(75),
-                              ),
-                              child: Lottie.asset(
-                                'assets/fonts/svgs/creating.json',
-                                fit: BoxFit.contain,
-                                repeat: true,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              _displayText.isEmpty ? _getMessageText() : _displayText,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 14,
-                                color: widget.isUser 
-                                    ? (isDark ? Colors.black87 : Colors.white)
-                                    : Theme.of(context).colorScheme.onSurface,
-                                height: 1.4,
-                              ),
-                            ),
-                          ],
+                        width: 120,
+                        height: 120,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white.withOpacity(0.1)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(60),
                         ),
-                      )
-                    else
-                      // Regular message display
+                        child: Lottie.asset(
+                          'assets/fonts/svgs/creating.json',
+                          fit: BoxFit.contain,
+                          repeat: true,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       Text(
-                        widget.isUser ? _getMessageText() : _displayText,
+                        _displayText.isEmpty ? _getMessageText() : _displayText,
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           fontFamily: 'Poppins',
-                          fontSize: 16,
-                          color: widget.isUser 
-                              ? (isDark ? Colors.black87 : Colors.white)
-                              : Theme.of(context).colorScheme.onSurface,
+                          fontSize: 14,
+                          color: Theme.of(context).colorScheme.onSurface,
                           height: 1.4,
                         ),
                       ),
-                    if (_isTyping && !widget.isUser && !_shouldShowCreatingAnimation())
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: SizedBox(
-                          height: 16,
-                          width: 8,
-                          child: const _TypingCursor(),
-                        ),
-                      ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _formatTime(widget.message.createdAt),
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 12,
-                        color: widget.isUser 
-                            ? (isDark ? Colors.grey[700] : Colors.grey[300])
-                            : (isDark ? Colors.grey[500] : Colors.grey[600]),
-                      ),
+                    ],
+                  ),
+                )
+              else
+                // Regular message display
+                Text(
+                  widget.isUser ? _getMessageText() : _displayText,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 16,
+                    color: widget.isUser 
+                        ? (isDark ? Colors.black87 : Colors.white)
+                        : Theme.of(context).colorScheme.onSurface,
+                    height: 1.4,
+                  ),
+                ),
+              const SizedBox(height: 4),
+              Text(
+                _formatTime(widget.message.createdAt),
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  color: widget.isUser 
+                      ? (isDark ? Colors.grey[700] : Colors.grey[300])
+                      : (isDark ? Colors.grey[500] : Colors.grey[600]),
+                ),
+              ),
+              if (widget.onTap != null && !widget.isUser)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.blue[900] : Colors.blue[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blue[700]!, width: 2),
                     ),
-                    if (widget.onTap != null && !widget.isUser)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: Colors.blue[50],
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.blue[700]!, width: 2),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.description,
-                                size: 24,
-                                color: Colors.blue[700],
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Tap to Open Document',
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 14,
-                                  color: Colors.blue[700],
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(
-                                Icons.arrow_forward,
-                                size: 20,
-                                color: Colors.blue[700],
-                              ),
-                            ],
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.description,
+                          size: 20,
+                          color: Colors.blue[700],
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'Tap to Open Document',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 14,
+                              color: Colors.blue[700],
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      ),
-                  ],
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.arrow_forward,
+                          size: 18,
+                          color: Colors.blue[700],
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
+            ],
           ),
-
-          if (widget.isUser) ...[
-            const SizedBox(width: 12),
-            // User Avatar
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white : Colors.black87,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-              child: Icon(
-                Icons.person,
-                color: isDark ? Colors.black87 : Colors.white,
-                size: 18,
-              ),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
@@ -343,7 +404,6 @@ class _MessageBubbleState extends State<MessageBubble> {
       text = content.toString();
     }
     
-    // Remove the animation marker
     if (text.contains('[ANIMATED_CREATING]')) {
       text = text.replaceAll('[ANIMATED_CREATING]', '');
     }
@@ -405,12 +465,13 @@ class _TypingCursorState extends State<_TypingCursor>
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return FadeTransition(
       opacity: _controller,
       child: Container(
         width: 2,
         height: 16,
-        color: Colors.black87,
+        color: isDark ? Colors.white : Colors.black87,
       ),
     );
   }

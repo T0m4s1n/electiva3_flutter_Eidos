@@ -113,6 +113,7 @@ class SyncService {
               'title': c['title'],
               'model': c['model'],
               'summary': c['summary'],
+              'context': c['context'],
               'is_archived': (c['is_archived'] as int? ?? 0) == 1,
               'last_message_at': c['last_message_at'],
               'created_at': c['created_at'],
@@ -205,6 +206,7 @@ class SyncService {
           'title': c['title'],
           'model': c['model'],
           'summary': c['summary'],
+          'context': c['context'],
           'is_archived': (c['is_archived'] == true) ? 1 : 0,
           'last_message_at': c['last_message_at'],
           'created_at': c['created_at'],
@@ -258,7 +260,7 @@ class SyncService {
 
     try {
       debugPrint('🔄 Step 1: Pushing pending data to cloud');
-      await _pushPendingData(userId);
+      await pushPendingData(userId);
 
       debugPrint('🔄 Step 2: Pulling new data from cloud');
       await _pullNewData(userId);
@@ -274,19 +276,21 @@ class SyncService {
     }
   }
 
-  /// Push solo datos pendientes
-  Future<void> _pushPendingData(String userId) async {
+  /// Push solo datos pendientes (public method)
+  Future<void> pushPendingData(String userId) async {
+    debugPrint('📤 SyncService.pushPendingData - Starting push');
     final Database db = await ChatDatabase.instance;
 
-    // Conversaciones pendientes
-    final List<Map<String, Object?>> pendingConvs = await db.query(
+    // Get all conversations (not just pending ones)
+    final List<Map<String, Object?>> allConvs = await db.query(
       'conversations',
-      where: 'user_id = ? AND updated_at > ?',
-      whereArgs: [userId, _getLastSyncTime()],
+      where: 'user_id = ?',
+      whereArgs: [userId],
     );
+    debugPrint('📤 Found ${allConvs.length} conversations to push');
 
-    if (pendingConvs.isNotEmpty) {
-      final List<Map<String, dynamic>> payload = pendingConvs
+    if (allConvs.isNotEmpty) {
+      final List<Map<String, dynamic>> payload = allConvs
           .map(
             (Map<String, Object?> c) => {
               'id': c['id'],
@@ -294,6 +298,7 @@ class SyncService {
               'title': c['title'],
               'model': c['model'],
               'summary': c['summary'],
+              'context': c['context'],
               'is_archived': (c['is_archived'] as int? ?? 0) == 1,
               'last_message_at': c['last_message_at'],
               'created_at': c['created_at'],
@@ -303,47 +308,49 @@ class SyncService {
           .toList();
 
       await supabase.from('conversations').upsert(payload, onConflict: 'id');
+      debugPrint('📤 Pushed ${allConvs.length} conversations to Supabase');
     }
 
-    // Mensajes pendientes
-    final List<Map<String, Object?>> pendingMsgs = await db.query(
-      'messages',
-      where: 'status = ?',
-      whereArgs: ['pending'],
-    );
+    // Get all messages for this user's conversations (not just pending)
+    final List<String> convIds = allConvs.map((c) => c['id'] as String).toList();
+    if (convIds.isNotEmpty) {
+      // Query for messages by conversation IDs
+      final String placeholders = List.filled(convIds.length, '?').join(',');
+      final List<Map<String, Object?>> allMsgs = await db.rawQuery(
+        'SELECT * FROM messages WHERE conversation_id IN ($placeholders)',
+        convIds,
+      );
+      debugPrint('📤 Found ${allMsgs.length} messages to push');
 
-    if (pendingMsgs.isNotEmpty) {
-      const int batchSize = 100;
-      for (int i = 0; i < pendingMsgs.length; i += batchSize) {
-        final List<Map<String, Object?>> slice = pendingMsgs.sublist(
-          i,
-          (i + batchSize).clamp(0, pendingMsgs.length),
-        );
-        final List<Map<String, dynamic>> payload = slice
-            .map(
-              (Map<String, Object?> m) => {
-                'id': m['id'],
-                'conversation_id': m['conversation_id'],
-                'role': m['role'],
-                'content': _tryParseJson(m['content']),
-                'created_at': m['created_at'],
-                'seq': m['seq'],
-                'parent_id': m['parent_id'],
-                'status': m['status'],
-                'is_deleted': (m['is_deleted'] as int? ?? 0) == 1,
-              },
-            )
-            .toList();
+      if (allMsgs.isNotEmpty) {
+        const int batchSize = 100;
+        for (int i = 0; i < allMsgs.length; i += batchSize) {
+          final List<Map<String, Object?>> slice = allMsgs.sublist(
+            i,
+            (i + batchSize).clamp(0, allMsgs.length),
+          );
+          final List<Map<String, dynamic>> payload = slice
+              .map(
+                (Map<String, Object?> m) => {
+                  'id': m['id'],
+                  'conversation_id': m['conversation_id'],
+                  'role': m['role'],
+                  'content': _tryParseJson(m['content']),
+                  'created_at': m['created_at'],
+                  'seq': m['seq'],
+                  'parent_id': m['parent_id'],
+                  'status': m['status'],
+                  'is_deleted': (m['is_deleted'] as int? ?? 0) == 1,
+                },
+              )
+              .toList();
 
-        await supabase.from('messages').upsert(payload, onConflict: 'id');
+          await supabase.from('messages').upsert(payload, onConflict: 'id');
+        }
+        debugPrint('📤 Pushed ${allMsgs.length} messages to Supabase');
       }
-
-      // Marcar como sincronizados
-      final List<String> ids = pendingMsgs
-          .map((Map<String, Object?> m) => m['id'] as String)
-          .toList();
-      await ChatDatabase.markMessagesSynced(ids);
     }
+    debugPrint('📤 SyncService.pushPendingData - Push complete');
   }
 
   /// Pull solo datos nuevos desde la nube
@@ -367,6 +374,7 @@ class SyncService {
           'title': c['title'],
           'model': c['model'],
           'summary': c['summary'],
+          'context': c['context'],
           'is_archived': (c['is_archived'] == true) ? 1 : 0,
           'last_message_at': c['last_message_at'],
           'created_at': c['created_at'],
@@ -421,6 +429,32 @@ class SyncService {
       } catch (_) {}
     }
     return {'text': raw?.toString() ?? ''};
+  }
+
+  /// Delete a conversation from Supabase
+  Future<void> deleteConversationFromCloud(String conversationId) async {
+    try {
+      debugPrint('🗑️ Deleting conversation $conversationId from Supabase');
+      
+      // First delete all messages from this conversation
+      await supabase
+          .from('messages')
+          .delete()
+          .eq('conversation_id', conversationId);
+      
+      debugPrint('✓ Deleted messages for conversation $conversationId from Supabase');
+      
+      // Then delete the conversation itself
+      await supabase
+          .from('conversations')
+          .delete()
+          .eq('id', conversationId);
+      
+      debugPrint('✓ Deleted conversation $conversationId from Supabase');
+    } catch (e) {
+      debugPrint('❌ Error deleting conversation from Supabase: $e');
+      rethrow;
+    }
   }
 
   String _getLastSyncTime() {

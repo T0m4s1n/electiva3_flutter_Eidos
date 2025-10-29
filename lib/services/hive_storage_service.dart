@@ -13,6 +13,7 @@ class HiveStorageService {
   // Keys for preferences
   static const String _aiPersonalityKey = 'ai_personality';
   static const String _isDarkModeKey = 'isDarkMode';
+  static const String _modelKey = 'model';
 
   /// Initialize Hive storage
   static Future<void> init() async {
@@ -80,6 +81,29 @@ class HiveStorageService {
     } catch (e) {
       debugPrint('Error saving theme mode: $e');
       rethrow;
+    }
+  }
+
+  /// Save preferred AI model
+  static Future<void> saveModel(String model) async {
+    try {
+      await _preferencesBox?.put(_modelKey, model);
+      debugPrint('Model saved: $model');
+    } catch (e) {
+      debugPrint('Error saving model: $e');
+      rethrow;
+    }
+  }
+
+  /// Load preferred AI model
+  static String loadModel() {
+    try {
+      return _preferencesBox?.get(_modelKey, defaultValue: 'gpt-4o-mini')
+              as String? ??
+          'gpt-4o-mini';
+    } catch (e) {
+      debugPrint('Error loading model: $e');
+      return 'gpt-4o-mini';
     }
   }
 

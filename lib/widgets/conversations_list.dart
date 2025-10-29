@@ -6,6 +6,7 @@ import '../controllers/navigation_controller.dart';
 import '../models/chat_models.dart';
 import '../services/chat_service.dart';
 import '../services/chat_database.dart';
+import '../services/auth_service.dart';
 import 'animated_icon_background.dart';
 
 class ConversationsList extends StatefulWidget {
@@ -38,6 +39,8 @@ class _ConversationsListState extends State<ConversationsList>
 
   Future<void> _initializeAndLoad() async {
     try {
+      isLoading.value = true;
+      
       // Initialize the database first
       await ChatDatabase.instance;
       debugPrint('Database initialized successfully');
@@ -46,6 +49,8 @@ class _ConversationsListState extends State<ConversationsList>
       await _loadConversations();
     } catch (e) {
       debugPrint('Error initializing database: $e');
+      conversations.clear();
+    } finally {
       isLoading.value = false;
     }
   }
@@ -67,7 +72,6 @@ class _ConversationsListState extends State<ConversationsList>
 
   Future<void> _loadConversations() async {
     try {
-      isLoading.value = true;
       debugPrint('Loading conversations from database...');
       final List<ConversationLocal> convs =
           await ChatService.getConversations();
@@ -86,8 +90,7 @@ class _ConversationsListState extends State<ConversationsList>
       conversations.refresh();
     } catch (e) {
       debugPrint('Error loading conversations: $e');
-    } finally {
-      isLoading.value = false;
+      conversations.clear();
     }
   }
 
@@ -183,6 +186,48 @@ class _ConversationsListState extends State<ConversationsList>
     }
   }
 
+  Future<void> _syncToSupabase() async {
+    try {
+      setState(() {
+        isLoading.value = true;
+      });
+      
+      await AuthService.syncPendingData();
+      
+      // Reload conversations after sync
+      await _loadConversations();
+      
+      if (mounted) {
+        Get.snackbar(
+          'Success',
+          'Chats synced to Supabase',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green[100],
+          colorText: Colors.green[800],
+          duration: const Duration(seconds: 2),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error syncing to Supabase: $e');
+      if (mounted) {
+        Get.snackbar(
+          'Error',
+          'Failed to sync chats: $e',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red[100],
+          colorText: Colors.red[800],
+          duration: const Duration(seconds: 3),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading.value = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Obx(() {
@@ -207,6 +252,17 @@ class _ConversationsListState extends State<ConversationsList>
                 return _buildConversationCard(conversation);
               },
             ),
+          
+          // Floating action button to sync
+          Positioned(
+            bottom: 20,
+            right: 20,
+            child: FloatingActionButton(
+              onPressed: _syncToSupabase,
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              child: const Icon(Icons.cloud_upload, color: Colors.white),
+            ),
+          ),
         ],
       );
     });
@@ -344,6 +400,42 @@ class _ConversationsListState extends State<ConversationsList>
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Model chip
+                  if ((conversation.model ?? '').isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.grey[800] : Colors.grey[200],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isDark ? Colors.grey[600]! : Colors.black87,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.memory,
+                            size: 14,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            conversation.model!,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   if (conversation.summary != null) ...[
                     const SizedBox(height: 4),
                     Text(

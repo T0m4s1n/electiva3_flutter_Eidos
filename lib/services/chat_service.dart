@@ -21,16 +21,27 @@ class ChatService {
       userId: userId,
     );
 
-    // Save to LOCAL DATABASE ONLY
+    // Save to local database
     await ChatDatabase.upsertConversation(conversation.toRow());
     
     // Wait for database to fully persist
     await Future.delayed(const Duration(milliseconds: 100));
     
-    debugPrint('ChatService.createConversation - Saved to local database only, skipping online sync');
+    debugPrint('ChatService.createConversation - Saved to local database');
     
-    // SKIP ONLINE SYNC - Using local storage only
-    debugPrint('ChatService.createConversation - Using local storage only, skipping online sync');
+    // Sync to Supabase if user is logged in
+    if (userId != null) {
+      try {
+        debugPrint('ChatService.createConversation - Uploading to Supabase');
+        await _syncService.syncPending();
+        debugPrint('ChatService.createConversation - Uploaded to Supabase');
+      } catch (e) {
+        debugPrint('ChatService.createConversation - Error syncing to Supabase: $e');
+        // Don't throw error, local save is primary
+      }
+    } else {
+      debugPrint('ChatService.createConversation - User not logged in, skipping Supabase sync');
+    }
 
     return conversation;
   }
@@ -62,10 +73,17 @@ class ChatService {
     // Wait for database to fully persist
     await Future.delayed(const Duration(milliseconds: 100));
     
-    // Verify it was saved
+    // Verify it was saved by directly querying the database
     debugPrint('ChatService.addMessage - Verifying message was saved: ${message.id}');
+    debugPrint('ChatService.addMessage - Conversation ID: $conversationId');
+    debugPrint('ChatService.addMessage - Message ID: ${message.id}');
+    
     final List<MessageLocal> savedMessages = await getMessages(conversationId);
-    final int matchingMessages = savedMessages.where((m) => m.id == message.id).length;
+    debugPrint('ChatService.addMessage - Retrieved ${savedMessages.length} messages from getMessages()');
+    
+    // Also check by ID directly
+    final messageByID = savedMessages.where((m) => m.id == message.id).toList();
+    final int matchingMessages = messageByID.length;
     debugPrint('ChatService.addMessage - Verification: Found $matchingMessages messages with ID ${message.id}');
 
     // Actualizar last_message_at de la conversación
@@ -75,8 +93,18 @@ class ChatService {
     debugPrint('ChatService.addMessage - Message saved successfully: ${message.id}');
     debugPrint('ChatService.addMessage - Total messages in conversation: ${savedMessages.length}');
 
-    // SKIP ONLINE SYNC - Using local storage only
-    debugPrint('ChatService.addMessage - Using local storage only, skipping online sync');
+    // Sync to Supabase if user is logged in
+    final String? userId = AuthService.currentUser?.id;
+    if (userId != null) {
+      try {
+        debugPrint('ChatService.addMessage - Syncing to Supabase (PUSH only, no PULL)');
+        await _syncService.pushPendingData(userId);
+        debugPrint('ChatService.addMessage - Synced to Supabase');
+      } catch (e) {
+        debugPrint('ChatService.addMessage - Error syncing to Supabase: $e');
+        // Don't throw error, local save is primary
+      }
+    }
 
     return message;
   }
@@ -184,19 +212,26 @@ class ChatService {
     debugPrint('ChatService.deleteConversation called for: $conversationId');
     
     try {
-      // Delete from local database storage
-      debugPrint('Calling ChatDatabase.deleteConversation');
-      await ChatDatabase.deleteConversation(conversationId);
-      debugPrint('ChatDatabase.deleteConversation completed successfully');
-
-      // Sincronizar si está logueado
       final String? userId = AuthService.currentUser?.id;
+      
+      // Delete from Supabase if user is logged in
       if (userId != null) {
-        debugPrint('User is logged in, syncing pending changes');
-        await _syncService.syncPending();
+        try {
+          debugPrint('Deleting conversation from Supabase: $conversationId');
+          await _syncService.deleteConversationFromCloud(conversationId);
+          debugPrint('Successfully deleted from Supabase');
+        } catch (e) {
+          debugPrint('Error deleting from Supabase: $e');
+          // Continue with local delete even if Supabase delete fails
+        }
       } else {
-        debugPrint('User is not logged in, skipping sync');
+        debugPrint('User not logged in, skipping Supabase delete');
       }
+      
+      // Delete from local database
+      debugPrint('Deleting from local database: $conversationId');
+      await ChatDatabase.deleteConversation(conversationId);
+      debugPrint('Successfully deleted from local database');
       
       debugPrint('Successfully completed delete for conversation $conversationId');
     } catch (e, stackTrace) {

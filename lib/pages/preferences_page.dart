@@ -251,6 +251,81 @@ class PreferencesPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Model selection
+          Text(
+            'Modelo de IA',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Selecciona el modelo a utilizar (por ahora solo GPT disponible)',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 14,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.grey[400]
+                  : Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Obx(
+            () => DropdownButtonFormField<String>(
+              value: preferencesController.model.value,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[600]!
+                        : Colors.black87,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[600]!
+                        : Colors.black87,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: Theme.of(context).colorScheme.primary,
+                    width: 2,
+                  ),
+                ),
+                filled: true,
+                fillColor: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[800]
+                    : Colors.grey[50],
+              ),
+              dropdownColor: Theme.of(context).cardTheme.color,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 16,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              items: const [
+                DropdownMenuItem<String>(
+                  value: 'gpt-4o-mini',
+                  child: Text('gpt-4o-mini'),
+                ),
+              ],
+              onChanged: (String? value) {
+                if (value != null) {
+                  preferencesController.setModel(value);
+                }
+              },
+            ),
+          ),
+          const SizedBox(height: 24),
+
           Text(
             'Personalidad de la IA',
             style: TextStyle(

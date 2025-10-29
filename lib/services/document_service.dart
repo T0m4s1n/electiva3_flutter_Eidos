@@ -11,7 +11,7 @@ class DocumentService {
   static const String _bucketName = 'documents';
 
   /// Save a document with versioning
-  static Future<void> saveDocument({
+  static Future<String> saveDocument({
     required String conversationId,
     required String title,
     required String content,
@@ -20,15 +20,17 @@ class DocumentService {
     try {
       final String? userId = AuthService.currentUser?.id;
       
+      // Save locally first regardless of user authentication
+      final String savedDocId = await _saveDocumentLocally(
+        conversationId: conversationId,
+        title: title,
+        content: content,
+        documentId: documentId,
+      );
+      
       if (userId == null) {
-        debugPrint('DocumentService: No user ID, saving locally only');
-        await _saveDocumentLocally(
-          conversationId: conversationId,
-          title: title,
-          content: content,
-          documentId: documentId,
-        );
-        return;
+        debugPrint('DocumentService: No user ID, saved locally only');
+        return savedDocId;
       }
 
       // If we have a documentId, this is an update - create a new version
@@ -39,37 +41,38 @@ class DocumentService {
           userId: userId,
         );
       } else {
-        // Create a new document
+        // Create a new document in Supabase
         await _createNewDocument(
           conversationId: conversationId,
           title: title,
           content: content,
           userId: userId,
+          documentId: savedDocId,
         );
       }
 
-      debugPrint('DocumentService: Document saved successfully');
+      debugPrint('DocumentService: Document saved successfully with ID: $savedDocId');
+      return savedDocId;
     } catch (e) {
       debugPrint('DocumentService: Error saving document - $e');
-      // Fallback to local storage
-      await _saveDocumentLocally(
+      // Return the document ID from local storage even if Supabase fails
+      return await _saveDocumentLocally(
         conversationId: conversationId,
         title: title,
         content: content,
         documentId: documentId,
       );
-      rethrow;
     }
   }
 
   /// Create a new document in Supabase
-  static Future<String> _createNewDocument({
+  static Future<void> _createNewDocument({
     required String conversationId,
     required String title,
     required String content,
     required String userId,
+    required String documentId,
   }) async {
-    final String documentId = IdGenerator.generateConversationId();
     final String now = DateTime.now().toUtc().toIso8601String();
 
     // Save to database
@@ -92,16 +95,6 @@ class DocumentService {
       content: content,
       version: 1,
     );
-
-    // Also save locally
-    await _saveDocumentLocally(
-      conversationId: conversationId,
-      title: title,
-      content: content,
-      documentId: documentId,
-    );
-
-    return documentId;
   }
 
   /// Create a new version of an existing document
@@ -183,7 +176,7 @@ class DocumentService {
   }
 
   /// Save document locally (SQLite)
-  static Future<void> _saveDocumentLocally({
+  static Future<String> _saveDocumentLocally({
     required String conversationId,
     required String title,
     required String content,
@@ -210,7 +203,8 @@ class DocumentService {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
 
-    debugPrint('DocumentService: Saved locally to SQLite');
+    debugPrint('DocumentService: Saved locally to SQLite with ID: $docId');
+    return docId;
   }
 
   /// Get a document by ID

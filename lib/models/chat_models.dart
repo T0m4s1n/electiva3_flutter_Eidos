@@ -9,6 +9,7 @@ class ConversationLocal {
   final String? title;
   final String? model;
   final String? summary;
+  final String? context; // JSON-encoded context
   final bool isArchived;
   final String? lastMessageAt; // ISO-8601
   final String createdAt; // ISO-8601
@@ -20,6 +21,7 @@ class ConversationLocal {
     this.title,
     this.model,
     this.summary,
+    this.context,
     required this.isArchived,
     this.lastMessageAt,
     required this.createdAt,
@@ -32,6 +34,7 @@ class ConversationLocal {
     'title': title,
     'model': model,
     'summary': summary,
+    'context': context,
     'is_archived': isArchived ? 1 : 0,
     'last_message_at': lastMessageAt,
     'created_at': createdAt,
@@ -45,6 +48,7 @@ class ConversationLocal {
       title: row['title'] as String?,
       model: row['model'] as String?,
       summary: row['summary'] as String?,
+      context: row['context'] as String?,
       isArchived: (row['is_archived'] as int? ?? 0) == 1,
       lastMessageAt: row['last_message_at'] as String?,
       createdAt: row['created_at'] as String,
@@ -58,6 +62,7 @@ class ConversationLocal {
     String? title,
     String? model,
     String? summary,
+    String? context,
     bool? isArchived,
     String? lastMessageAt,
     String? createdAt,
@@ -69,6 +74,7 @@ class ConversationLocal {
       title: title ?? this.title,
       model: model ?? this.model,
       summary: summary ?? this.summary,
+      context: context ?? this.context,
       isArchived: isArchived ?? this.isArchived,
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
       createdAt: createdAt ?? this.createdAt,
@@ -78,7 +84,7 @@ class ConversationLocal {
 
   @override
   String toString() {
-    return 'ConversationLocal(id: $id, userId: $userId, title: $title, model: $model, summary: $summary, isArchived: $isArchived, lastMessageAt: $lastMessageAt, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'ConversationLocal(id: $id, userId: $userId, title: $title, model: $model, summary: $summary, context: $context, isArchived: $isArchived, lastMessageAt: $lastMessageAt, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -90,6 +96,7 @@ class ConversationLocal {
         other.title == title &&
         other.model == model &&
         other.summary == summary &&
+        other.context == context &&
         other.isArchived == isArchived &&
         other.lastMessageAt == lastMessageAt &&
         other.createdAt == createdAt &&
@@ -104,6 +111,7 @@ class ConversationLocal {
       title,
       model,
       summary,
+      context,
       isArchived,
       lastMessageAt,
       createdAt,
@@ -270,6 +278,7 @@ class ConversationFactory {
     String? title,
     String? model,
     String? userId,
+    String? context,
   }) {
     final String now = DateTime.now().toUtc().toIso8601String();
     return ConversationLocal(
@@ -278,6 +287,7 @@ class ConversationFactory {
       title: title ?? 'Nueva conversación',
       model: model ?? 'gpt-4o-mini',
       summary: null,
+      context: context,
       isArchived: false,
       lastMessageAt: null,
       createdAt: now,

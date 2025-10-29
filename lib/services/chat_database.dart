@@ -10,7 +10,7 @@ class ChatDatabase {
   static const bool _enabled = true;
   
   static const String _dbName = 'chat_app.db';
-  static const int _dbVersion = 3;
+  static const int _dbVersion = 4;
 
   static Database? _db;
 
@@ -28,6 +28,7 @@ class ChatDatabase {
     title TEXT,
     model TEXT,
     summary TEXT,
+    context TEXT,
     is_archived INTEGER NOT NULL DEFAULT 0,
     last_message_at TEXT,
     created_at TEXT NOT NULL,
@@ -81,6 +82,30 @@ ON messages(conversation_id, created_at, seq);
   CREATE INDEX IF NOT EXISTS idx_documents_conv
     ON documents(conversation_id, updated_at);
   ''';
+  
+  // Document versions table
+  static const String _sqlCreateDocumentVersions = '''
+  CREATE TABLE IF NOT EXISTS document_versions (
+    id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL,
+    conversation_id TEXT NOT NULL,
+    user_id TEXT,
+    content TEXT NOT NULL,
+    file_path TEXT,
+    file_url TEXT,
+    version_number INTEGER NOT NULL,
+    change_summary TEXT,
+    created_at TEXT NOT NULL,
+    created_by TEXT,
+    FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+  );
+  ''';
+  
+  static const String _sqlIdxDocumentVersions = '''
+  CREATE INDEX IF NOT EXISTS idx_document_versions_document
+    ON document_versions(document_id, version_number);
+  ''';
 
   static Future<Database> get instance async {
     if (!_enabled) {
@@ -89,6 +114,11 @@ ON messages(conversation_id, created_at, seq);
     if (_db != null) return _db!;
     _db = await _open();
     return _db!;
+  }
+  
+  // Helper to check if database operations should be skipped
+  static Future<bool> shouldSkipOperation() async {
+    return !_enabled;
   }
 
   static Future<Database> _open() async {
@@ -107,6 +137,8 @@ ON messages(conversation_id, created_at, seq);
         await db.execute(_sqlIdxMsgConvCreated);
         await db.execute(_sqlCreateDocuments);
         await db.execute(_sqlIdxDocumentsConv);
+        await db.execute(_sqlCreateDocumentVersions);
+        await db.execute(_sqlIdxDocumentVersions);
       },
       onUpgrade: (Database db, int oldVersion, int newVersion) async {
         debugPrint('Database upgrade from version $oldVersion to $newVersion');
@@ -126,6 +158,19 @@ ON messages(conversation_id, created_at, seq);
           await db.execute(_sqlCreateDocuments);
           await db.execute(_sqlIdxDocumentsConv);
           debugPrint('Created documents table');
+        }
+        
+        if (oldVersion < 4) {
+          debugPrint('Running migration to v4: Adding context field and document_versions table');
+          try {
+            // Add context column if it doesn't exist
+            await db.execute('ALTER TABLE conversations ADD COLUMN context TEXT');
+          } catch (e) {
+            debugPrint('Context column may already exist: $e');
+          }
+          await db.execute(_sqlCreateDocumentVersions);
+          await db.execute(_sqlIdxDocumentVersions);
+          debugPrint('Migration to v4 complete');
         }
       },
     );
@@ -199,8 +244,10 @@ ON messages(conversation_id, created_at, seq);
     
     try {
       final Database db = await instance;
+      debugPrint('ChatDatabase: === UPSERT MESSAGE START ===');
       debugPrint('ChatDatabase: Attempting to save message: ${msg['id']}');
-      debugPrint('ChatDatabase: Message data: $msg');
+      debugPrint('ChatDatabase: Conversation ID in message: ${msg['conversation_id']}');
+      debugPrint('ChatDatabase: Message data FULL: $msg');
       
       // Ensure the conversation exists before inserting the message
       final String? conversationId = msg['conversation_id'] as String?;
@@ -226,6 +273,7 @@ ON messages(conversation_id, created_at, seq);
               'title': 'New Chat',
               'model': 'gpt-4o-mini',
               'summary': null,
+              'context': null,
               'is_archived': 0,
               'last_message_at': msg['created_at'],
               'created_at': msg['created_at'],
@@ -244,14 +292,33 @@ ON messages(conversation_id, created_at, seq);
         } else {
           debugPrint('ChatDatabase: Verified conversation exists');
           
-          // Use transaction to ensure message is committed
-          await db.transaction((txn) async {
-            await txn.insert(
-              'messages',
-              msg,
-              conflictAlgorithm: ConflictAlgorithm.replace,
-            );
-          });
+          // Insert message without transaction for better debugging
+          await db.insert(
+            'messages',
+            msg,
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+          debugPrint('ChatDatabase: Message inserted directly into database');
+          
+          // Immediately verify the message was saved
+          final List<Map<String, Object?>> immediateCheck = await db.query(
+            'messages',
+            where: 'id = ?',
+            whereArgs: [msg['id']],
+            limit: 1,
+          );
+          debugPrint('ChatDatabase: IMMEDIATE check after insert - found ${immediateCheck.length} messages with this ID');
+          if (immediateCheck.isNotEmpty) {
+            debugPrint('ChatDatabase: IMMEDIATE check SUCCESS - message found with data: ${immediateCheck.first}');
+          }
+          
+          // Check messages by conversation
+          final List<Map<String, Object?>> convCheck = await db.query(
+            'messages',
+            where: 'conversation_id = ?',
+            whereArgs: [conversationId],
+          );
+          debugPrint('ChatDatabase: IMMEDIATE check by conversation - found ${convCheck.length} messages in conversation $conversationId');
         }
       } else {
         // No conversation ID provided
@@ -265,7 +332,14 @@ ON messages(conversation_id, created_at, seq);
       // Wait a moment for transaction to commit
       await Future.delayed(const Duration(milliseconds: 50));
       
-      // Verify the message was saved
+      // Wait for transaction to commit
+      await Future.delayed(const Duration(milliseconds: 50));
+      
+      // Verify the message was saved - check by ID
+      debugPrint('ChatDatabase: Starting final verification...');
+      debugPrint('ChatDatabase: Looking for message ID: ${msg['id']}');
+      debugPrint('ChatDatabase: Looking for conversation ID: ${msg['conversation_id']}');
+      
       final List<Map<String, Object?>> saved = await db.query(
         'messages',
         where: 'id = ?',
@@ -273,14 +347,26 @@ ON messages(conversation_id, created_at, seq);
         limit: 1,
       );
       
-      debugPrint('ChatDatabase: Message saved successfully: ${msg['id']}');
-      debugPrint('ChatDatabase: Verification - Found ${saved.length} message(s) with this ID');
+      debugPrint('ChatDatabase: Found ${saved.length} message(s) with this ID');
+      
+      // Also check by conversation
+      final List<Map<String, Object?>> savedByConv = await db.query(
+        'messages',
+        where: 'conversation_id = ?',
+        whereArgs: [msg['conversation_id']],
+      );
+      debugPrint('ChatDatabase: Found ${savedByConv.length} message(s) for conversation ${msg['conversation_id']}');
       
       if (saved.isEmpty) {
         debugPrint('ChatDatabase: WARNING - Message was not found after insert!');
+      } else {
+        debugPrint('ChatDatabase: Message verification SUCCESS - found in database');
+        debugPrint('ChatDatabase: Saved message data: ${saved.first}');
       }
-    } catch (e) {
+      debugPrint('ChatDatabase: === UPSERT MESSAGE END ===');
+    } catch (e, stackTrace) {
       debugPrint('ChatDatabase: Error upserting message: $e');
+      debugPrint('ChatDatabase: Stack trace: $stackTrace');
       debugPrint('ChatDatabase: Message data: $msg');
       rethrow;
     }
@@ -360,6 +446,13 @@ ON messages(conversation_id, created_at, seq);
       );
       debugPrint('ChatDatabase: Verification - Found ${convCheck.length} conversation(s) with ID $conversationId');
       
+      // DEBUG: Check ALL messages in the database to see what conversation_ids exist
+      final List<Map<String, Object?>> allMessagesInDB = await db.query('messages');
+      debugPrint('ChatDatabase: DEBUG - Total messages in database: ${allMessagesInDB.length}');
+      for (var msg in allMessagesInDB.take(5)) {
+        debugPrint('ChatDatabase: DEBUG - Message ${msg['id']} has conversation_id: ${msg['conversation_id']}');
+      }
+      
       // Get all messages for this conversation (including deleted ones for debugging)
       final List<Map<String, Object?>> allMessages = await db.query(
         'messages',
@@ -367,7 +460,8 @@ ON messages(conversation_id, created_at, seq);
         whereArgs: [conversationId],
         orderBy: 'created_at ASC, seq ASC',
       );
-      debugPrint('ChatDatabase: Found ${allMessages.length} total messages (including deleted)');
+      debugPrint('ChatDatabase: Querying for conversation_id: $conversationId');
+      debugPrint('ChatDatabase: Found ${allMessages.length} total messages (including deleted) for this conversation');
       
       // Get only non-deleted messages
       final List<Map<String, Object?>> results = await db.query(

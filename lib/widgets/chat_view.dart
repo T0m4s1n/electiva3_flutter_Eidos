@@ -66,50 +66,42 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _fadeAnimation,
-      child: Container(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        child: Stack(
-          children: [
-            // Animated background - only show for new chats
-            Obx(() {
-              if (chatController.isNewChat.value) {
-                return const Positioned.fill(
-                  child: ChatIconBackground(),
-                );
-              }
-              return const SizedBox.shrink();
-            }),
-            
-            // Main content
-            Column(
-              children: [
-                // Header with back button and title
-                _buildHeader(),
+      child: Stack(
+        children: [
+          // Always show pyramid background
+          const Positioned.fill(
+            child: ChatPyramidBackground(),
+          ),
+          
+          // Main content
+          Column(
+            children: [
+              // Header with back button and title
+              _buildHeader(),
 
-                // Main chat content
-                Expanded(
-                  child: Obx(() {
-                    if (chatController.hasMessages.value) {
-                      return _buildChatMessages();
-                    } else {
-                      // Show new chat view for any chat without messages
-                      return _buildEmptyState();
-                    }
-                  }),
-                ),
+              // Main chat content
+              Expanded(
+                child: Obx(() {
+                  if (chatController.hasMessages.value) {
+                    return _buildChatMessages();
+                  } else {
+                    // Show new chat view for any chat without messages
+                    return _buildEmptyState();
+                  }
+                }),
+              ),
 
-                // Chat input
-                Obx(
-                  () => ChatInput(
-                    controller: chatController.messageController,
-                    onSend: chatController.sendMessage,
-                    isLoading: chatController.isLoading.value,
-                  ),
+              // Chat input
+              Obx(
+                () => ChatInput(
+                  controller: chatController.messageController,
+                  onSend: chatController.sendMessage,
+                  isLoading: chatController.isLoading.value,
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -148,6 +140,21 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
               ),
             ),
           ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Obx(() => Text(
+              chatController.conversationTitle.value,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+            )),
+          ),
         ],
       ),
     );
@@ -166,40 +173,34 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
       return ListView.builder(
         controller: chatController.scrollController,
         padding: const EdgeInsets.symmetric(vertical: 16),
-        itemCount:
-            displayMessages.length +
-            (chatController.isTyping.value ? 1 : 0),
+        itemCount: displayMessages.length,
         itemBuilder: (context, index) {
-          if (index < displayMessages.length) {
-            final message = displayMessages[index];
-            
-            // Check if this is a completion message with document ready
-            final String messageText = _getMessageText(message);
-            final bool isDocumentReady = messageText.contains('Document generated successfully') ||
-                                        messageText.contains('Your document is ready');
-            
-            // Only animate messages that were added AFTER initial load
-            // Messages at index < _initialMessageCount were loaded from database
-            final bool isNewMessage = index >= _initialMessageCount;
-            final bool isLastMessage = index == displayMessages.length - 1;
-            
-            // Only animate if: 
-            // 1. Message was added in this session (not loaded)
-            // 2. It's the last message
-            // 3. It's an assistant message
-            final bool shouldAnimate = isNewMessage && 
-                                      isLastMessage && 
-                                      message.role == 'assistant';
-            
-            return MessageBubble(
-              message: message,
-              isUser: message.role == 'user',
-              animateTyping: shouldAnimate,
-              onTap: isDocumentReady ? chatController.openDocumentEditor : null,
-            );
-          } else {
-            return const TypingIndicator();
-          }
+          final message = displayMessages[index];
+          
+          // Check if this is a completion message with document ready
+          final String messageText = _getMessageText(message);
+          final bool isDocumentReady = messageText.contains('Document generated successfully') ||
+                                      messageText.contains('Your document is ready');
+          
+          // Only animate messages that were added AFTER initial load
+          // Messages at index < _initialMessageCount were loaded from database
+          final bool isNewMessage = index >= _initialMessageCount;
+          final bool isLastMessage = index == displayMessages.length - 1;
+          
+          // Only animate if: 
+          // 1. Message was added in this session (not loaded)
+          // 2. It's the last message
+          // 3. It's an assistant message
+          final bool shouldAnimate = isNewMessage && 
+                                    isLastMessage && 
+                                    message.role == 'assistant';
+          
+          return MessageBubble(
+            message: message,
+            isUser: message.role == 'user',
+            animateTyping: shouldAnimate,
+            onTap: isDocumentReady ? chatController.openDocumentEditor : null,
+          );
         },
       );
     });

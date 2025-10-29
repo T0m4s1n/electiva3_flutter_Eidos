@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../services/hive_storage_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:convert';
 import 'dart:io';
 import '../services/chat_service.dart';
+import '../services/document_service.dart';
 import '../models/chat_models.dart';
 import '../controllers/navigation_controller.dart';
 import '../controllers/preferences_controller.dart';
@@ -24,6 +26,7 @@ class ChatController extends GetxController {
   final RxBool isGeneratingDocument = false.obs;
   final Rx<String?> generatedDocument = Rx<String?>(null);
   final Rx<String?> documentTitle = Rx<String?>(null);
+  final Rx<String?> currentDocumentId = Rx<String?>(null);
 
   // Text controller for input
   final TextEditingController messageController = TextEditingController();
@@ -55,7 +58,7 @@ class ChatController extends GetxController {
       final ConversationLocal conversation =
           await ChatService.createConversation(
             title: 'New Chat',
-            model: 'gpt-4o-mini',
+            model: HiveStorageService.loadModel(),
           );
 
       debugPrint('Created new conversation: ${conversation.id}');
@@ -809,7 +812,22 @@ Your document is ready. Tap this message to open the editor and view your docume
       generatedDocument.value = documentContent;
       documentTitle.value = _extractTitleFromRequest(userRequest);
 
-      // Save the document content as a special message in the database
+      // Save the document locally first, then to Supabase
+      String? documentId;
+      try {
+        documentId = await DocumentService.saveDocument(
+          conversationId: currentConversationId.value,
+          title: documentTitle.value!,
+          content: documentContent,
+        );
+        currentDocumentId.value = documentId;
+        debugPrint('Document saved successfully with ID: $documentId');
+      } catch (e) {
+        debugPrint('Error saving document: $e');
+        // Continue even if saving fails
+      }
+
+      // Also save the document content as a special message in the database
       await ChatService.addMessage(
         conversationId: currentConversationId.value,
         role: 'assistant',
@@ -1060,6 +1078,7 @@ Make it comprehensive and ready to use with proper markdown formatting.''',
     try {
       final String? document = generatedDocument.value;
       final String? title = documentTitle.value;
+      final String? docId = currentDocumentId.value;
 
       debugPrint('Attempting to open document editor...');
       debugPrint(
@@ -1067,6 +1086,7 @@ Make it comprehensive and ready to use with proper markdown formatting.''',
       );
       debugPrint('Document length: ${document?.length ?? 0}');
       debugPrint('Title: $title');
+      debugPrint('Document ID: $docId');
 
       if (document != null && document.isNotEmpty) {
         debugPrint(
@@ -1076,6 +1096,7 @@ Make it comprehensive and ready to use with proper markdown formatting.''',
           () => DocumentEditor(
             documentTitle: title ?? 'Document',
             documentContent: document,
+            documentId: docId,
           ),
         );
         debugPrint('Document editor opened successfully');
