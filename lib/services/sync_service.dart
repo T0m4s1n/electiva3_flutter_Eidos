@@ -9,10 +9,6 @@ class SyncService {
 
   SyncService(this.supabase);
 
-  /// 1) Al iniciar sesión:
-  /// - Promueve TODO lo local anónimo (user_id NULL) a la cuenta (userId).
-  /// - Sube (push) a nube por upsert.
-  /// - Hace un pull para dejar local = nube.
   Future<void> onLogin(String userId) async {
     debugPrint(
       '🔄 SyncService.onLogin - Starting login sync for user: $userId',
@@ -35,8 +31,6 @@ class SyncService {
     }
   }
 
-  /// 2) Al hacer logout:
-  /// - Borra absolutamente TODO lo local (conversaciones y mensajes).
   Future<void> onLogout() async {
     debugPrint('🗑️ SyncService.onLogout - Starting logout cleanup');
     try {
@@ -48,11 +42,9 @@ class SyncService {
     }
   }
 
-  /// Promueve datos locales anónimos (user_id NULL) a una cuenta concreta.
   Future<void> _promoteLocalAnonToUser(String userId) async {
     final Database db = await ChatDatabase.instance;
 
-    // Conversaciones sin user_id: asignar userId y marcar timestamps
     final List<Map<String, Object?>> convsAnon = await db.query(
       'conversations',
       where: 'user_id IS NULL',
@@ -73,7 +65,6 @@ class SyncService {
     }
     await batch.commit(noResult: true);
 
-    // Mensajes de esas conversaciones: marcar status 'pending' para asegurar push
     final List<String> convIds = convsAnon
         .map((Map<String, Object?> c) => c['id'] as String)
         .toList();
@@ -87,7 +78,6 @@ class SyncService {
     await msgBatch.commit(noResult: true);
   }
 
-  /// Sube TODO de un usuario: conversaciones + mensajes (pending/ok) — idempotente por upsert.
   Future<void> pushAll(String userId) async {
     debugPrint(
       '📤 SyncService.pushAll - Starting push to cloud for user: $userId',
@@ -104,7 +94,6 @@ class SyncService {
     debugPrint('📤 Found ${convs.length} conversations to push');
 
     if (convs.isNotEmpty) {
-      // Mapea a payload para Supabase
       final List<Map<String, dynamic>> payload = convs
           .map(
             (Map<String, Object?> c) => {
@@ -126,7 +115,6 @@ class SyncService {
       debugPrint('✅ Pushed ${convs.length} conversations to cloud');
     }
 
-    // Mensajes del usuario (de las conversaciones anteriores)
     if (convs.isNotEmpty) {
       final List<String> convIds = convs
           .map((Map<String, Object?> c) => c['id'] as String)
@@ -140,7 +128,6 @@ class SyncService {
       debugPrint('📤 Found ${msgs.length} messages to push');
 
       if (msgs.isNotEmpty) {
-        // Subir en lotes para evitar payloads gigantes
         const int batchSize = 500;
         int totalPushed = 0;
         for (int i = 0; i < msgs.length; i += batchSize) {
@@ -171,7 +158,6 @@ class SyncService {
           );
         }
 
-        // Marcar local como synced
         final List<String> ids = msgs
             .map((Map<String, Object?> m) => m['id'] as String)
             .toList();
@@ -185,7 +171,6 @@ class SyncService {
     debugPrint('✅ SyncService.pushAll - Push to cloud completed successfully');
   }
 
-  /// Baja TODO desde la nube para un usuario y reemplaza/merguea local (idempotente).
   Future<void> pullAll(String userId) async {
     debugPrint(
       '📥 SyncService.pullAll - Starting pull from cloud for user: $userId',
@@ -216,11 +201,6 @@ class SyncService {
       await batch.commit(noResult: true);
     }
 
-    // 2) Messages (por lotes si hay muchos)
-    // Nota: Aquí hacemos un pull completo. Si prefieres incremental,
-    // guarda un cursor (last_pulled_at) en una tabla meta local.
-
-    // Pull simple (una sola llamada; si esperas muchos mensajes, pagina con range())
     final List<Map<String, dynamic>> msgs = await supabase
         .from('messages')
         .select()
@@ -247,7 +227,6 @@ class SyncService {
     }
   }
 
-  /// Sincronización incremental - solo datos pendientes
   Future<void> syncPending() async {
     debugPrint('🔄 SyncService.syncPending - Starting background sync');
     final String? userId = supabase.auth.currentUser?.id;
@@ -272,11 +251,9 @@ class SyncService {
       debugPrint(
         '❌ SyncService.syncPending - Error during background sync: $e',
       );
-      // No rethrow para no afectar la funcionalidad principal
     }
   }
 
-  /// Push solo datos pendientes (public method)
   Future<void> pushPendingData(String userId) async {
     debugPrint('📤 SyncService.pushPendingData - Starting push');
     final Database db = await ChatDatabase.instance;
@@ -312,7 +289,9 @@ class SyncService {
     }
 
     // Get all messages for this user's conversations (not just pending)
-    final List<String> convIds = allConvs.map((c) => c['id'] as String).toList();
+    final List<String> convIds = allConvs
+        .map((c) => c['id'] as String)
+        .toList();
     if (convIds.isNotEmpty) {
       // Query for messages by conversation IDs
       final String placeholders = List.filled(convIds.length, '?').join(',');
@@ -353,11 +332,9 @@ class SyncService {
     debugPrint('📤 SyncService.pushPendingData - Push complete');
   }
 
-  /// Pull solo datos nuevos desde la nube
   Future<void> _pullNewData(String userId) async {
     final String lastSync = _getLastSyncTime();
 
-    // Pull conversaciones actualizadas
     final List<Map<String, dynamic>> convs = await supabase
         .from('conversations')
         .select()
@@ -385,7 +362,6 @@ class SyncService {
       await batch.commit(noResult: true);
     }
 
-    // Pull mensajes nuevos
     if (convs.isNotEmpty) {
       final List<String> convIds = convs
           .map((Map<String, dynamic> e) => e['id'] as String)
@@ -417,7 +393,6 @@ class SyncService {
       }
     }
 
-    // Actualizar timestamp de última sincronización
     _updateLastSyncTime();
   }
 
@@ -435,21 +410,20 @@ class SyncService {
   Future<void> deleteConversationFromCloud(String conversationId) async {
     try {
       debugPrint('🗑️ Deleting conversation $conversationId from Supabase');
-      
+
       // First delete all messages from this conversation
       await supabase
           .from('messages')
           .delete()
           .eq('conversation_id', conversationId);
-      
-      debugPrint('✓ Deleted messages for conversation $conversationId from Supabase');
-      
+
+      debugPrint(
+        '✓ Deleted messages for conversation $conversationId from Supabase',
+      );
+
       // Then delete the conversation itself
-      await supabase
-          .from('conversations')
-          .delete()
-          .eq('id', conversationId);
-      
+      await supabase.from('conversations').delete().eq('id', conversationId);
+
       debugPrint('✓ Deleted conversation $conversationId from Supabase');
     } catch (e) {
       debugPrint('❌ Error deleting conversation from Supabase: $e');
@@ -458,13 +432,8 @@ class SyncService {
   }
 
   String _getLastSyncTime() {
-    // Implementar almacenamiento del último timestamp de sync
-    // Por ahora, usar un timestamp muy antiguo para sincronizar todo
     return DateTime(2020, 1, 1).toUtc().toIso8601String();
   }
 
-  void _updateLastSyncTime() {
-    // Implementar almacenamiento del último timestamp de sync
-    // Por ahora, no hacer nada
-  }
+  void _updateLastSyncTime() {}
 }

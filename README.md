@@ -1,230 +1,202 @@
-# Eidos - Chat App con Flutter y Supabase
+# Eidos - Chat App with Flutter and Supabase
 
-Una aplicación de chat inteligente construida con Flutter, Supabase y OpenAI, que funciona tanto online como offline con sincronización automática.
+An intelligent chat application built with Flutter, Supabase, and OpenAI that works online and offline with automatic sync.
 
-## 🚀 Características
+## 🚀 Features
 
-- **Chat Inteligente**: Integración con OpenAI GPT-4o-mini
-- **Offline-First**: Funciona sin conexión a internet
-- **Sincronización Automática**: Los datos se sincronizan cuando hay conexión
-- **Privacidad Estricta**: Los datos se eliminan al hacer logout
-- **Interfaz Moderna**: Diseño limpio y responsivo
-- **Gestión de Conversaciones**: Crear, editar y eliminar conversaciones
+- **Smooth login**: In-place verification on the login screen; the button shows a spinner and inline error messages
+- **Configurable models**: Functional selector in Preferences with `gpt-4o-mini (current)`, `gpt-4o`, and `gpt-5`
+- **Intelligent chat**: OpenAI integration; uses the selected model at runtime
+- **Automatic sync**: Data syncs when online (Supabase)
+- **Strict privacy**: Complete local cleanup on logout
+- **Modern UI**: Clean design, Lottie animations, and animated backgrounds
+- **Conversation management**: Create, load, and persist conversations and messages
 
-## 📋 Requisitos Previos
+## 📋 Prerequisites
 
-- Flutter SDK (versión 3.9.2 o superior)
-- Cuenta de Supabase
-- API Key de OpenAI
+- Flutter SDK (stable) compatible with Dart ^3.9.2
+- Supabase account (URL and Anon Key)
+- OpenAI API Key
 
-## ⚙️ Configuración
+## ⚙️ Setup
 
-### 1. Clonar el Repositorio
+### 1. Clone the repository
 
 ```bash
-git clone <tu-repositorio>
+git clone <your-repository>
 cd electiva3_flutter_Eidos
 ```
 
-### 2. Instalar Dependencias
+### 2. Install dependencies
 
 ```bash
 flutter pub get
 ```
 
-### 3. Configurar Variables de Entorno
+### 3. Configure environment variables
 
-Crea un archivo `.env` en la raíz del proyecto con las siguientes variables:
+Create a `.env` file at the project root with:
 
 ```env
 # Supabase Configuration
-SUPABASE_URL=tu_url_de_supabase_aqui
-SUPABASE_ANON_KEY=tu_clave_anonima_de_supabase_aqui
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
 
 # OpenAI Configuration
-OPENAI_KEY=tu_clave_de_api_de_openai_aqui
+OPENAI_KEY=your_openai_api_key
 ```
 
-### 4. Configurar Supabase
+### 4. Configure Supabase (if applicable in your project)
 
-1. Ve a tu proyecto de Supabase
-2. Ejecuta el script SQL en `database_schema.sql` en el SQL Editor
-3. Esto creará las tablas necesarias y las políticas de seguridad
+1. Go to your Supabase project
+2. Run the SQL script in `database_schema.sql` in the SQL Editor
+3. This will create the required tables and security policies
 
-### 5. Configurar OpenAI
+### 5. Configure OpenAI
 
-1. Ve a [OpenAI API](https://platform.openai.com/api-keys)
-2. Crea una nueva API key
-3. Agrega la clave al archivo `.env`
+1. Go to [OpenAI API](https://platform.openai.com/api-keys)
+2. Create a new API key
+3. Add the key to the `.env` file
 
-## 🏗️ Arquitectura
+## 🏗️ Architecture
 
-### Servicios Principales
+### Core Services
 
-- **`ChatService`**: API principal para operaciones de chat
-- **`SyncService`**: Maneja la sincronización con Supabase
-- **`ChatDatabase`**: Base de datos local SQLite
-- **`AuthService`**: Autenticación y gestión de usuarios
+- `ChatService`: Primary API for chat operations
+- `SyncService`: Handles syncing with Supabase
+- `ChatDatabase`: Local SQLite database
+- `AuthService`: Authentication and user management
+- `HiveStorageService`: Preferences (model, personality, rules)
 
-### Controladores
+### Controllers
 
-- **`ChatController`**: Lógica del chat y mensajes
-- **`AuthController`**: Gestión de autenticación
-- **`NavigationController`**: Navegación entre vistas
+- `ChatController`: Chat and messages logic
+- `AuthController`: Authentication handling
+- `NavigationController`: View navigation and visibility
 
-### Modelos
+### Models
 
-- **`ConversationLocal`**: Modelo para conversaciones
-- **`MessageLocal`**: Modelo para mensajes
+- `ConversationLocal`: Conversation model
+- `MessageLocal`: Message model
 
-## 🎯 Uso
+### Chat view
+- Bubble-style message list
+- AI typing indicator
+- Text input field
+- Quick action buttons
 
-### Iniciar una Nueva Conversación
+### Empty states
+- Lottie animations
+- Welcome messages
+- Suggested actions
 
-```dart
-final conversation = await ChatService.createConversation(
-  title: 'Mi conversación',
-  model: 'gpt-4o-mini',
-);
-```
+## 🛠️ Development
 
-### Enviar un Mensaje
-
-```dart
-await ChatService.createUserMessage(
-  conversationId: conversation.id,
-  text: 'Hola, ¿cómo estás?',
-);
-```
-
-### Obtener Respuesta de IA
-
-```dart
-await ChatService.createAssistantMessage(
-  conversationId: conversation.id,
-  text: '¡Hola! Estoy muy bien, gracias.',
-);
-```
-
-## 🔄 Flujos de Sincronización
-
-### Modo Anónimo
-- Los mensajes se guardan localmente
-- No se sincronizan con la nube
-- Se mantienen hasta hacer login
-
-### Con Login
-- Los datos anónimos se promueven a la cuenta
-- Sincronización automática con Supabase
-- Los datos se mantienen en la nube
-
-### Logout
-- Se eliminan todos los datos locales
-- Se cierra la sesión en Supabase
-- Privacidad garantizada
-
-## 🎨 Interfaz de Usuario
-
-### Pantalla Principal
-- Lista de conversaciones existentes
-- Botón para crear nueva conversación
-- Información de usuario y logout
-
-### Vista de Chat
-- Lista de mensajes con burbujas
-- Indicador de escritura de IA
-- Campo de entrada de texto
-- Botones de acción rápida
-
-### Estados Vacíos
-- Animaciones Lottie
-- Mensajes de bienvenida
-- Acciones sugeridas
-
-## 🛠️ Desarrollo
-
-### Estructura del Proyecto
+### Project structure
 
 ```
 lib/
-├── controllers/          # Controladores GetX
-├── services/            # Servicios de negocio
-├── models/             # Modelos de datos
-├── widgets/            # Widgets reutilizables
-├── pages/              # Páginas de la aplicación
-├── routes/             # Configuración de rutas
-└── bindings/           # Inyección de dependencias
+├── controllers/          # GetX controllers
+├── services/            # Business services
+├── models/              # Data models
+├── widgets/             # Reusable widgets
+├── pages/               # App pages
+├── routes/              # Route configuration
+└── bindings/            # Dependency injection
 ```
 
-### Comandos Útiles
+### Useful commands
 
 ```bash
-# Ejecutar la aplicación
+# Run the app
 flutter run
 
-# Análisis de código
+# Analyze code
 flutter analyze
 
-# Formatear código
+# Format code
 dart format .
 
-# Limpiar proyecto
+# Clean project
 flutter clean
 ```
 
-## 🔒 Seguridad
+## 📦 Packages and versions
 
-- **RLS (Row Level Security)**: Solo el usuario puede ver sus datos
-- **IDs Determinísticos**: Generados en el cliente para evitar duplicados
-- **Limpieza de Datos**: Eliminación completa al hacer logout
-- **Validación de Entrada**: Sanitización de mensajes
+From `pubspec.yaml`:
 
-## 📱 Plataformas Soportadas
+- lottie: ^3.1.2
+- supabase_flutter: ^2.8.0
+- flutter_dotenv: ^5.1.0
+- image_picker: ^1.0.4
+- sqflite: ^2.3.0
+- path_provider: ^2.1.1
+- path: ^1.8.3
+- shared_preferences: ^2.2.2
+- hive: ^2.2.3
+- hive_flutter: ^1.1.0
+- uuid: ^4.2.1
+- get: ^4.6.6
+- flutter_markdown: ^0.6.18
+- intl: ^0.19.0
 
-- ✅ Android
-- ✅ iOS
-- ✅ Web
-- ✅ Windows
-- ✅ macOS
-- ✅ Linux
+Dev:
+
+- flutter_lints: ^5.0.0
+- hive_generator: ^2.0.1
+- build_runner: ^2.4.7
+
+## ▶️ How to run
+
+1) Create and complete the `.env` file (see Setup).
+2) Make sure a device/emulator is running.
+3) Run:
+
+```bash
+flutter clean
+flutter pub get
+flutter run
+```
+
+If you see asset (Lottie) errors, ensure `assets/fonts/svgs/` contains the JSON files in use (e.g., `alert.json`, `check.json`) and they are listed in `pubspec.yaml`.
 
 ## 🐛 Troubleshooting
 
-### Problemas Comunes
+### Common issues
 
-1. **Error de API Key**: Verifica que las claves estén correctas en `.env`
-2. **Problemas de Sincronización**: Revisa la conexión a internet
-3. **Errores de Base de Datos**: Ejecuta el script SQL en Supabase
+1. **API Key error**: Verify keys in `.env`
+2. **Sync issues**: Check your internet connection
+3. **Database errors**: Run the SQL script in Supabase
 
-### Logs de Debug
+### Debug logs
 
 ```dart
-// Habilitar logs detallados
+// Enable detailed logs
 debugPrint('Error: $e');
 ```
 
-## 📄 Licencia
+## 📄 License
 
-Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
+This project is licensed under the MIT License. See `LICENSE` for details.
 
-## 🤝 Contribuciones
+## 🤝 Contributions
 
-Las contribuciones son bienvenidas. Por favor:
+Contributions are welcome. Please:
 
-1. Fork el proyecto
-2. Crea una rama para tu feature
-3. Commit tus cambios
-4. Push a la rama
-5. Abre un Pull Request
+1. Fork the project
+2. Create a feature branch
+3. Commit your changes
+4. Push to your branch
+5. Open a Pull Request
 
-## 📞 Soporte
+## 📞 Support
 
-Si tienes problemas o preguntas:
+If you have questions or issues:
 
-1. Revisa la documentación
-2. Busca en los issues existentes
-3. Crea un nuevo issue si es necesario
+1. Review the documentation
+2. Search existing issues
+3. Open a new issue if needed
 
 ---
 
-**¡Disfruta usando Eidos!** 🚀
+**Enjoy using Eidos!** 🚀
