@@ -26,19 +26,60 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   final GlobalKey _headerKey = GlobalKey();
   final TextEditingController _chatSearchController = TextEditingController();
+  final RxBool _showSearchBar = false.obs;
+  late AnimationController _searchAnimationController;
+  late Animation<double> _searchFadeAnimation;
+  late Animation<Offset> _searchSlideAnimation;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    
+    // Initialize search bar animation controller
+    _searchAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+
+    _searchFadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(
+      CurvedAnimation(
+        parent: _searchAnimationController,
+        curve: Curves.easeOut,
+      ),
+    );
+
+    _searchSlideAnimation = Tween<Offset>(
+      begin: const Offset(0.0, -0.5),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _searchAnimationController,
+        curve: Curves.easeOut,
+      ),
+    );
+
+    // Listen to search bar visibility changes
+    ever(_showSearchBar, (bool show) {
+      if (show) {
+        _searchAnimationController.forward();
+      } else {
+        _searchAnimationController.reverse();
+      }
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _searchAnimationController.dispose();
+    _chatSearchController.dispose();
     super.dispose();
   }
 
@@ -126,6 +167,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       onLogout: () => authController.signOut(),
                       onEditProfile: () => navController.showEditProfileView(),
                       onPreferences: () => Get.toNamed(AppRoutes.preferences),
+                      onToggleSearch: () {
+                        _showSearchBar.value = !_showSearchBar.value;
+                      },
                       onCreateChat: () async {
                         final chatController = Get.find<ChatController>();
                         
@@ -191,79 +235,116 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       },
                     ),
 
-                  // Search bar below header, above conversations list (only when showing list)
-                  if (!navController.showEditProfile.value &&
-                      !navController.showChatView.value)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                      child: Obx(
-                        () => TextField(
-                          controller: _chatSearchController,
-                          decoration: InputDecoration(
-                            hintText: TranslationService.translate('search_chats'),
-                          prefixIcon: const Icon(Icons.search, size: 18),
-                          filled: true,
-                          fillColor: Theme.of(context).brightness == Brightness.dark
-                              ? const Color(0xFF2C2C2C)
-                              : Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: Theme.of(context).brightness == Brightness.dark
-                                  ? Colors.grey[600]!
-                                  : Colors.black87,
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: Theme.of(context).brightness == Brightness.dark
-                                  ? Colors.grey[600]!
-                                  : Colors.black87,
-                            ),
-                          ),
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          ),
-                          onSubmitted: (q) async {
-                            final List<ConversationLocal> convs =
-                                await ChatService.getConversations();
-                            final String query = q.trim().toLowerCase();
-                            ConversationLocal? match;
-                            for (final c in convs) {
-                              final title = (c.title ?? '').toLowerCase();
-                              if (title.contains(query)) {
-                                match = c;
-                                break;
-                              }
-                            }
-                            if (match != null) {
-                              final chatController = Get.find<ChatController>();
-                              await chatController.loadConversation(match.id);
-                              navController.showChat();
-                              final state = _headerKey.currentState;
-                              try {
-                                (state as dynamic).closeMenuExternal();
-                              } catch (_) {}
-                            }
-                          },
-                        ),
-                      ),
-                    ),
+                  // Search bar below header, above conversations list (only when showing list and search is toggled)
+                  Obx(() {
+                    if (!navController.showEditProfile.value &&
+                        !navController.showChatView.value) {
+                      return AnimatedBuilder(
+                        animation: _searchAnimationController,
+                        builder: (context, child) {
+                          if (_searchAnimationController.value == 0.0) {
+                            return const SizedBox.shrink();
+                          }
 
-                  // Quick actions below search (Documents / Analytics / Archive)
-                  if (!navController.showEditProfile.value &&
-                      !navController.showChatView.value)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
+                          return FadeTransition(
+                            opacity: _searchFadeAnimation,
+                            child: SlideTransition(
+                              position: _searchSlideAnimation,
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                                child: TextField(
+                                  controller: _chatSearchController,
+                                  decoration: InputDecoration(
+                                    hintText: TranslationService.translate('search_chats'),
+                                    prefixIcon: const Icon(Icons.search, size: 18),
+                                    filled: true,
+                                    fillColor: Theme.of(context).brightness == Brightness.dark
+                                        ? const Color(0xFF2C2C2C)
+                                        : Colors.white,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                        color: Theme.of(context).brightness == Brightness.dark
+                                            ? Colors.grey[600]!
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                        color: Theme.of(context).brightness == Brightness.dark
+                                            ? Colors.grey[600]!
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                    contentPadding:
+                                        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  ),
+                                  onSubmitted: (q) async {
+                                    final List<ConversationLocal> convs =
+                                        await ChatService.getConversations();
+                                    final String query = q.trim().toLowerCase();
+                                    ConversationLocal? match;
+                                    for (final c in convs) {
+                                      final title = (c.title ?? '').toLowerCase();
+                                      if (title.contains(query)) {
+                                        match = c;
+                                        break;
+                                      }
+                                    }
+                                    if (match != null) {
+                                      final chatController = Get.find<ChatController>();
+                                      await chatController.loadConversation(match.id);
+                                      navController.showChat();
+                                      final state = _headerKey.currentState;
+                                      try {
+                                        (state as dynamic).closeMenuExternal();
+                                      } catch (_) {}
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  }),
+
+                  // Chat Archive button below search (with smooth animation)
+                  Obx(() {
+                    if (!navController.showEditProfile.value &&
+                        !navController.showChatView.value) {
+                      return AnimatedBuilder(
+                        animation: _searchAnimationController,
+                        builder: (context, child) {
+                          return SlideTransition(
+                            position: Tween<Offset>(
+                              begin: Offset.zero,
+                              end: const Offset(0.0, 0.1),
+                            ).animate(
+                              CurvedAnimation(
+                                parent: _searchAnimationController,
+                                curve: Curves.easeOut,
+                              ),
+                            ),
+                            child: FadeTransition(
+                              opacity: Tween<double>(
+                                begin: 1.0,
+                                end: 1.0,
+                              ).animate(
+                                CurvedAnimation(
+                                  parent: _searchAnimationController,
+                                  curve: Curves.easeOut,
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                                 child: GestureDetector(
-                                  onTap: () => Get.toNamed(AppRoutes.documents),
+                                  onTap: () => Get.toNamed(AppRoutes.archive),
                                   child: Container(
+                                    width: double.infinity,
                                     padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                                     decoration: BoxDecoration(
                                       color: Theme.of(context).brightness == Brightness.dark
@@ -278,101 +359,42 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                     ),
                                     child: Row(
                                       mainAxisAlignment: MainAxisAlignment.center,
-                                      mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(Icons.folder_copy_outlined, color: Theme.of(context).iconTheme.color, size: 16),
+                                        Icon(Icons.archive_outlined, color: Theme.of(context).iconTheme.color, size: 16),
                                         const SizedBox(width: 6),
-                                        Flexible(
-                                          child: Obx(() => Text(
-                                            TranslationService.translate('documents'),
-                                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 12),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          )),
-                                        ),
+                                        Obx(() => Text(
+                                          TranslationService.translate('chat_archive'),
+                                          style: const TextStyle(fontFamily: 'Poppins', fontSize: 12),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        )),
                                       ],
                                     ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: GestureDetector(
-                                  onTap: () => Get.toNamed(AppRoutes.analytics),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context).brightness == Brightness.dark
-                                          ? const Color(0xFF2C2C2C)
-                                          : Colors.white,
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: Theme.of(context).brightness == Brightness.dark
-                                            ? Colors.grey[600]!
-                                            : Colors.black87,
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.analytics_outlined, color: Theme.of(context).iconTheme.color, size: 16),
-                                        const SizedBox(width: 6),
-                                        Flexible(
-                                          child: Obx(() => Text(
-                                            TranslationService.translate('analytics'),
-                                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 12),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          )),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          // Chat Archive button below Documents and Analytics
-                          GestureDetector(
-                            onTap: () => Get.toNamed(AppRoutes.archive),
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).brightness == Brightness.dark
-                                    ? const Color(0xFF2C2C2C)
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: Theme.of(context).brightness == Brightness.dark
-                                      ? Colors.grey[600]!
-                                      : Colors.black87,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.archive_outlined, color: Theme.of(context).iconTheme.color, size: 16),
-                                  const SizedBox(width: 6),
-                                  Obx(() => Text(
-                                    TranslationService.translate('chat_archive'),
-                                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 12),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  )),
-                                ],
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
+                          );
+                        },
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  }),
 
-                  // Main content
+                  // Main content (with smooth animation)
                   Expanded(
-                    child: Stack(
+                    child: AnimatedBuilder(
+                      animation: _searchAnimationController,
+                      builder: (context, child) {
+                        return Transform.translate(
+                          offset: Offset(
+                            0,
+                            _searchAnimationController.value * 56, // Approximate search bar height + padding
+                          ),
+                          child: child,
+                        );
+                      },
+                      child: Stack(
                       children: [
                         Obx(() {
                           // Use ValueKey to prevent unnecessary rebuilds
@@ -393,6 +415,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             child: _buildSyncButton(context),
                           ),
                       ],
+                    ),
                     ),
                   ),
                 ],

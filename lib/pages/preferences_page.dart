@@ -177,6 +177,26 @@ class PreferencesPage extends StatelessWidget {
       ),
       child: Column(
         children: [
+          Obx(
+            () => _buildNavTile(
+              context,
+              icon: Icons.folder_copy_outlined,
+              title: TranslationService.translate('documents'),
+              subtitle: 'Manage your documents',
+              route: AppRoutes.documents,
+            ),
+          ),
+          const Divider(height: 24),
+          Obx(
+            () => _buildNavTile(
+              context,
+              icon: Icons.analytics_outlined,
+              title: TranslationService.translate('analytics'),
+              subtitle: 'View your analytics',
+              route: AppRoutes.analytics,
+            ),
+          ),
+          const Divider(height: 24),
           _buildNavTile(
             context,
             icon: Icons.tune_outlined,

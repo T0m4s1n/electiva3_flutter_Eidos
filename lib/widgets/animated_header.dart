@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:get/get.dart';
-import '../controllers/theme_controller.dart';
 import '../services/translation_service.dart';
 
 class AnimatedHeader extends StatefulWidget {
@@ -16,6 +15,7 @@ class AnimatedHeader extends StatefulWidget {
   final VoidCallback? onPreferences;
   final ValueChanged<bool>? onMenuStateChanged;
   final ValueChanged<String>? onOpenConversation; // open chat by id
+  final VoidCallback? onToggleSearch; // toggle search bar visibility
 
   const AnimatedHeader({
     super.key,
@@ -30,6 +30,7 @@ class AnimatedHeader extends StatefulWidget {
     this.onPreferences,
     this.onMenuStateChanged,
     this.onOpenConversation,
+    this.onToggleSearch,
   });
 
   @override
@@ -275,8 +276,63 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
 
                     const SizedBox(width: 12),
 
-                    // Theme toggle button
-                    _buildThemeToggle(),
+                    // Search button
+                    GestureDetector(
+                      onTap: () {
+                        widget.onToggleSearch?.call();
+                      },
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.grey[800]
+                              : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? Colors.grey[600]!
+                                : Colors.black87,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.search,
+                          color: Theme.of(context).iconTheme.color,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 12),
+
+                    // Preferences button
+                    GestureDetector(
+                      onTap: () {
+                        widget.onPreferences?.call();
+                      },
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.grey[800]
+                              : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? Colors.grey[600]!
+                                : Colors.black87,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.settings_outlined,
+                          color: Theme.of(context).iconTheme.color,
+                          size: 20,
+                        ),
+                      ),
+                    ),
 
                     const SizedBox(width: 12),
 
@@ -519,23 +575,6 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
 
                                         const SizedBox(height: 12),
 
-                                        // Preferences button
-                                        _buildSkeletonButton(
-                                          icon: Icons.settings_outlined,
-                                          textKey: 'preferences',
-                                          onTap: () {
-                                            _closeMenu();
-                                            Future.delayed(
-                                              const Duration(milliseconds: 150),
-                                              () {
-                                                widget.onPreferences?.call();
-                                              },
-                                            );
-                                          },
-                                        ),
-
-                                        const SizedBox(height: 12),
-
                                         // Logout button
                                         _buildSkeletonButton(
                                           icon: Icons.logout,
@@ -670,47 +709,4 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
     );
   }
 
-  Widget _buildThemeToggle() {
-    final ThemeController themeController = Get.find<ThemeController>();
-
-    return Obx(
-      () => GestureDetector(
-        onTap: () => themeController.toggleTheme(),
-        child: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? Colors.grey[800]
-                : Colors.grey[100],
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.grey[600]!
-                  : Colors.black87,
-            ),
-          ),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            transitionBuilder: (child, animation) {
-              return RotationTransition(
-                turns: animation,
-                child: FadeTransition(opacity: animation, child: child),
-              );
-            },
-            child: Icon(
-              themeController.isDarkMode.value
-                  ? Icons.light_mode_outlined
-                  : Icons.dark_mode_outlined,
-              key: ValueKey(themeController.isDarkMode.value),
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.amber[300]
-                  : Colors.black87,
-              size: 20,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
