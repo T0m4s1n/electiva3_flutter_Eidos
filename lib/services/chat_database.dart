@@ -10,7 +10,7 @@ class ChatDatabase {
   static const bool _enabled = true;
   
   static const String _dbName = 'chat_app.db';
-  static const int _dbVersion = 4;
+  static const int _dbVersion = 5;
 
   static Database? _db;
 
@@ -106,6 +106,33 @@ ON messages(conversation_id, created_at, seq);
   CREATE INDEX IF NOT EXISTS idx_document_versions_document
     ON document_versions(document_id, version_number);
   ''';
+  
+  // Reminders table
+  static const String _sqlCreateReminders = '''
+  CREATE TABLE IF NOT EXISTS reminders (
+    id TEXT PRIMARY KEY,
+    user_id TEXT,
+    title TEXT NOT NULL,
+    description TEXT,
+    reminder_date TEXT NOT NULL,
+    is_completed INTEGER NOT NULL DEFAULT 0,
+    created_from_chat INTEGER NOT NULL DEFAULT 0,
+    conversation_id TEXT,
+    message_id TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  ''';
+  
+  static const String _sqlIdxRemindersUser = '''
+  CREATE INDEX IF NOT EXISTS idx_reminders_user
+    ON reminders(user_id);
+  ''';
+  
+  static const String _sqlIdxRemindersDate = '''
+  CREATE INDEX IF NOT EXISTS idx_reminders_date
+    ON reminders(reminder_date);
+  ''';
 
   static Future<Database> get instance async {
     if (!_enabled) {
@@ -139,6 +166,9 @@ ON messages(conversation_id, created_at, seq);
         await db.execute(_sqlIdxDocumentsConv);
         await db.execute(_sqlCreateDocumentVersions);
         await db.execute(_sqlIdxDocumentVersions);
+        await db.execute(_sqlCreateReminders);
+        await db.execute(_sqlIdxRemindersUser);
+        await db.execute(_sqlIdxRemindersDate);
       },
       onUpgrade: (Database db, int oldVersion, int newVersion) async {
         debugPrint('Database upgrade from version $oldVersion to $newVersion');
@@ -171,6 +201,14 @@ ON messages(conversation_id, created_at, seq);
           await db.execute(_sqlCreateDocumentVersions);
           await db.execute(_sqlIdxDocumentVersions);
           debugPrint('Migration to v4 complete');
+        }
+        
+        if (oldVersion < 5) {
+          debugPrint('Running migration to v5: Creating reminders table');
+          await db.execute(_sqlCreateReminders);
+          await db.execute(_sqlIdxRemindersUser);
+          await db.execute(_sqlIdxRemindersDate);
+          debugPrint('Migration to v5 complete');
         }
       },
     );

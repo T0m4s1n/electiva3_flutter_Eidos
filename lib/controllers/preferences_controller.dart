@@ -6,16 +6,16 @@ import 'package:uuid/uuid.dart';
 
 enum AIPersonality {
   precise(
-    'Preciso',
-    'Eres un asistente de IA preciso y directo. Proporcionas respuestas concisas, basadas en hechos y datos específicos.',
+    'Precise',
+    'You are a precise and direct AI assistant. You provide concise responses based on facts and specific data.',
   ),
   creative(
-    'Creativo',
-    'Eres un asistente de IA creativo e imaginativo. Proporcionas respuestas innovadoras, sugerencias creativas y enfoques únicos.',
+    'Creative',
+    'You are a creative and imaginative AI assistant. You provide innovative responses, creative suggestions, and unique approaches.',
   ),
   writer(
-    'Redactor',
-    'Eres un asistente de IA especializado en redacción. Proporcionas respuestas bien estructuradas, detalladas y con excelente calidad de escritura.',
+    'Writer',
+    'You are an AI assistant specialized in writing. You provide well-structured, detailed responses with excellent writing quality.',
   );
 
   const AIPersonality(this.displayName, this.systemPrompt);

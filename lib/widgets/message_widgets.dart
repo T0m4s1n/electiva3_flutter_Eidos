@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'dart:async';
 import '../models/chat_models.dart';
 import '../controllers/auth_controller.dart';
+import '../services/translation_service.dart';
 
 class MessageBubble extends StatefulWidget {
   final MessageLocal message;
@@ -600,35 +601,37 @@ class _ChatInputState extends State<ChatInput> {
                   color: isDark ? Colors.grey[600]! : Colors.black87,
                 ),
               ),
-              child: TextField(
-                controller: widget.controller,
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 16,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Type your message...',
-                  hintStyle: TextStyle(
+              child: Obx(
+                () => TextField(
+                  controller: widget.controller,
+                  style: TextStyle(
                     fontFamily: 'Poppins',
-                    color: isDark ? Colors.grey[500] : Colors.grey[500],
+                    fontSize: 16,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
+                  decoration: InputDecoration(
+                    hintText: TranslationService.translate('type_a_message'),
+                    hintStyle: TextStyle(
+                      fontFamily: 'Poppins',
+                      color: isDark ? Colors.grey[500] : Colors.grey[500],
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                   ),
+                  maxLines: null,
+                  textInputAction: TextInputAction.newline,
+                  onChanged: (value) {
+                    // Handle text changes if needed
+                  },
+                  onSubmitted: (value) {
+                    if (value.trim().isNotEmpty && !widget.isLoading) {
+                      widget.onSend?.call();
+                    }
+                  },
                 ),
-                maxLines: null,
-                textInputAction: TextInputAction.newline,
-                onChanged: (value) {
-                  // Handle text changes if needed
-                },
-                onSubmitted: (value) {
-                  if (value.trim().isNotEmpty && !widget.isLoading) {
-                    widget.onSend?.call();
-                  }
-                },
               ),
             ),
           ),

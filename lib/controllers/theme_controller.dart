@@ -6,6 +6,7 @@ class ThemeController extends GetxController {
   // Observable for theme mode
   final Rx<ThemeMode> themeMode = ThemeMode.light.obs;
   final RxBool isDarkMode = false.obs;
+  final RxBool isChangingTheme = false.obs;
 
   @override
   void onInit() {
@@ -29,6 +30,12 @@ class ThemeController extends GetxController {
 
   // Toggle between light and dark mode
   Future<void> toggleTheme() async {
+    // Show loading animation
+    isChangingTheme.value = true;
+    
+    // Small delay to show animation
+    await Future.delayed(const Duration(milliseconds: 150));
+    
     isDarkMode.value = !isDarkMode.value;
     themeMode.value = isDarkMode.value ? ThemeMode.dark : ThemeMode.light;
     
@@ -42,10 +49,25 @@ class ThemeController extends GetxController {
     
     // Update GetX theme
     Get.changeThemeMode(themeMode.value);
+    
+    // Wait for theme to apply
+    await Future.delayed(const Duration(milliseconds: 100));
+    
+    // Hide loading animation
+    isChangingTheme.value = false;
   }
 
   // Set specific theme mode
   Future<void> setThemeMode(bool dark) async {
+    // Only show animation if theme is actually changing
+    if (isDarkMode.value != dark) {
+      // Show loading animation
+      isChangingTheme.value = true;
+      
+      // Small delay to show animation
+      await Future.delayed(const Duration(milliseconds: 150));
+    }
+    
     isDarkMode.value = dark;
     themeMode.value = dark ? ThemeMode.dark : ThemeMode.light;
     
@@ -57,6 +79,14 @@ class ThemeController extends GetxController {
     }
     
     Get.changeThemeMode(themeMode.value);
+    
+    // Wait for theme to apply
+    if (isChangingTheme.value) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      // Hide loading animation
+      isChangingTheme.value = false;
+    }
   }
 }
 

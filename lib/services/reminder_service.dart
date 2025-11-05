@@ -25,9 +25,17 @@ class ReminderService {
       
       // Initialize timezone
       tz.initializeTimeZones();
-      final location = tz.getLocation('America/New_York'); // Default timezone, can be made configurable
-      tz.setLocalLocation(location);
-      debugPrint('ReminderService: Timezone initialized to ${location.name}');
+      // Use the device's local timezone instead of hardcoding
+      try {
+        // Try to get the device's actual timezone
+        final location = tz.local;
+        debugPrint('ReminderService: Timezone initialized to ${location.name}');
+      } catch (e) {
+        // Fallback to a default timezone if we can't detect it
+        final location = tz.getLocation('America/New_York');
+        tz.setLocalLocation(location);
+        debugPrint('ReminderService: Timezone initialized to ${location.name} (fallback)');
+      }
 
       // Initialize local notifications
       const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -52,6 +60,25 @@ class ReminderService {
         throw Exception('Failed to initialize notifications plugin');
       }
       debugPrint('ReminderService: Notifications plugin initialized successfully');
+
+      // Create notification channel for Android (required for scheduled notifications)
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
+            _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        if (androidImplementation != null) {
+          await androidImplementation.createNotificationChannel(
+            const AndroidNotificationChannel(
+              'reminders',
+              'Reminders',
+              description: 'Notifications for reminders and scheduled tasks',
+              importance: Importance.high,
+              playSound: true,
+              enableVibration: true,
+            ),
+          );
+          debugPrint('ReminderService: Android notification channel created');
+        }
+      }
 
       // Request permissions
       debugPrint('ReminderService: Requesting permissions...');
@@ -159,12 +186,19 @@ class ReminderService {
       debugPrint('ReminderService: Reminder saved locally: $reminderId');
 
       // Schedule local notification for the reminder
+      debugPrint('ReminderService: Scheduling notification for reminder: $reminderId');
+      debugPrint('ReminderService: Reminder date: $reminderDate');
+      debugPrint('ReminderService: Current time: ${DateTime.now()}');
+      debugPrint('ReminderService: Time until reminder: ${reminderDate.difference(DateTime.now()).inMinutes} minutes');
+      
       await _scheduleNotification(
         id: reminderId.hashCode,
         title: title,
         body: description ?? title,
         scheduledDate: reminderDate,
       );
+      
+      debugPrint('ReminderService: Notification scheduled successfully');
 
       // Save to Supabase if logged in
       if (userId != null) {
@@ -273,7 +307,32 @@ class ReminderService {
     required DateTime scheduledDate,
   }) async {
     try {
-      final tz.TZDateTime scheduledTZ = tz.TZDateTime.from(scheduledDate, tz.local);
+      // Ensure the scheduled date is in the future
+      final DateTime now = DateTime.now();
+      if (scheduledDate.isBefore(now)) {
+        debugPrint('ReminderService: Warning - scheduled date is in the past: $scheduledDate, current time: $now');
+        throw Exception('Scheduled date cannot be in the past');
+      }
+
+      // Convert to timezone-aware datetime
+      // Ensure we're using the device's local timezone
+      final tz.Location location = tz.local;
+      final tz.TZDateTime scheduledTZ = tz.TZDateTime.from(scheduledDate, location);
+      final tz.TZDateTime nowTZ = tz.TZDateTime.from(now, location);
+      
+      // Verify the timezone conversion
+      debugPrint('ReminderService: Scheduling notification for $scheduledDate (local time: $scheduledTZ)');
+      debugPrint('ReminderService: Current time: $now (local timezone: ${location.name})');
+      debugPrint('ReminderService: Current TZ time: $nowTZ');
+      debugPrint('ReminderService: Scheduled TZ time: $scheduledTZ');
+      debugPrint('ReminderService: Time difference: ${scheduledTZ.difference(nowTZ).inMinutes} minutes');
+      
+      // Double-check the scheduled time is in the future
+      if (scheduledTZ.isBefore(nowTZ)) {
+        debugPrint('ReminderService: ERROR - Scheduled TZ time is in the past!');
+        debugPrint('ReminderService: Scheduled: $scheduledTZ, Now: $nowTZ');
+        throw Exception('Scheduled timezone-aware date is in the past');
+      }
 
       // Android notification configuration for background notifications
       const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
@@ -304,20 +363,38 @@ class ReminderService {
       );
 
       // Schedule notification - works even when app is closed
+      // For very short-term notifications (less than 15 minutes), use exact mode
+      // For longer notifications, use exactAllowWhileIdle for better battery optimization
+      final int minutesUntilNotification = scheduledTZ.difference(nowTZ).inMinutes;
+      final AndroidScheduleMode scheduleMode = minutesUntilNotification < 15
+          ? AndroidScheduleMode.exact
+          : AndroidScheduleMode.exactAllowWhileIdle;
+      
+      debugPrint('ReminderService: Using schedule mode: $scheduleMode (${minutesUntilNotification} minutes until notification)');
+      
       await _notifications.zonedSchedule(
         id,
         title,
         body,
         scheduledTZ,
         details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle, // Works in doze mode
+        androidScheduleMode: scheduleMode,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time, // Match by time
       );
 
-      debugPrint('ReminderService: Notification scheduled for $scheduledDate (will appear even when app is closed)');
-    } catch (e) {
+      debugPrint('ReminderService: Notification scheduled successfully for $scheduledTZ (will appear even when app is closed)');
+      
+      // Verify the notification was scheduled
+      final List<PendingNotificationRequest> pendingNotifications = await _notifications.pendingNotificationRequests();
+      final bool isScheduled = pendingNotifications.any((n) => n.id == id);
+      if (isScheduled) {
+        debugPrint('ReminderService: Notification verified in pending list (ID: $id)');
+      } else {
+        debugPrint('ReminderService: WARNING - Notification not found in pending list (ID: $id)');
+      }
+    } catch (e, stackTrace) {
       debugPrint('ReminderService: Error scheduling notification - $e');
+      debugPrint('ReminderService: Stack trace - $stackTrace');
       rethrow;
     }
   }

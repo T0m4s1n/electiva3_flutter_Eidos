@@ -383,3 +383,357 @@ CREATE POLICY "docs_delete_own"
     bucket_id = 'documents' AND
     auth.uid()::text = (storage.foldername(name))[1]
   );
+
+-- ============ ADDITIONAL TABLES ============
+
+-- Advanced Settings table
+-- Stores user-specific advanced settings
+CREATE TABLE IF NOT EXISTS public.advanced_settings (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  max_tokens INTEGER NOT NULL DEFAULT 1000,
+  apply_to_all_chats BOOLEAN NOT NULL DEFAULT TRUE,
+  auto_clear_cache BOOLEAN NOT NULL DEFAULT FALSE,
+  enable_analytics BOOLEAN NOT NULL DEFAULT TRUE,
+  enable_crash_reports BOOLEAN NOT NULL DEFAULT TRUE,
+  auto_sync BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id)
+);
+
+-- Crash Reports table
+-- Stores crash reports submitted by users
+CREATE TABLE IF NOT EXISTS public.crash_reports (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  error_message TEXT NOT NULL,
+  stack_trace TEXT,
+  device_info JSONB,
+  app_version TEXT,
+  os_version TEXT,
+  additional_info JSONB,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'resolved', 'dismissed')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ
+);
+
+-- Reminders table
+-- Stores reminders created by users through chat or manually
+CREATE TABLE IF NOT EXISTS public.reminders (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  reminder_date TIMESTAMPTZ NOT NULL,
+  is_completed BOOLEAN NOT NULL DEFAULT FALSE,
+  created_from_chat BOOLEAN NOT NULL DEFAULT FALSE,
+  conversation_id UUID REFERENCES public.conversations(id) ON DELETE SET NULL,
+  message_id UUID,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Notification Preferences table
+-- Stores user-specific notification preferences
+CREATE TABLE IF NOT EXISTS public.notification_preferences (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  enable_push BOOLEAN NOT NULL DEFAULT TRUE,
+  enable_in_app BOOLEAN NOT NULL DEFAULT TRUE,
+  enable_sound BOOLEAN NOT NULL DEFAULT TRUE,
+  enable_vibration BOOLEAN NOT NULL DEFAULT TRUE,
+  quiet_hours_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  quiet_start_hour INTEGER NOT NULL DEFAULT 22,
+  quiet_start_minute INTEGER NOT NULL DEFAULT 0,
+  quiet_end_hour INTEGER NOT NULL DEFAULT 7,
+  quiet_end_minute INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id)
+);
+
+-- Feedback Messages table
+-- Stores feedback messages submitted by users
+CREATE TABLE IF NOT EXISTS public.feedback_messages (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  type TEXT NOT NULL CHECK (type IN ('Bug report', 'Feature request', 'Feedback')),
+  severity TEXT NOT NULL CHECK (severity IN ('Low', 'Medium', 'High')),
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  contact_email TEXT,
+  attachment_urls JSONB,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'resolved', 'dismissed')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============ ADDITIONAL INDEXES ============
+
+-- Index for advanced settings by user
+CREATE INDEX IF NOT EXISTS idx_advanced_settings_user
+  ON public.advanced_settings(user_id);
+
+-- Index for crash reports by user
+CREATE INDEX IF NOT EXISTS idx_crash_reports_user
+  ON public.crash_reports(user_id);
+
+-- Index for crash reports by status
+CREATE INDEX IF NOT EXISTS idx_crash_reports_status
+  ON public.crash_reports(status);
+
+-- Index for crash reports by created date
+CREATE INDEX IF NOT EXISTS idx_crash_reports_created
+  ON public.crash_reports(created_at DESC);
+
+-- Index for reminders by user
+CREATE INDEX IF NOT EXISTS idx_reminders_user
+  ON public.reminders(user_id);
+
+-- Index for reminders by date
+CREATE INDEX IF NOT EXISTS idx_reminders_date
+  ON public.reminders(reminder_date);
+
+-- Index for active reminders (not completed)
+CREATE INDEX IF NOT EXISTS idx_reminders_active
+  ON public.reminders(user_id, reminder_date)
+  WHERE is_completed = FALSE;
+
+-- Index for notification preferences by user
+CREATE INDEX IF NOT EXISTS idx_notification_preferences_user
+  ON public.notification_preferences(user_id);
+
+-- Index for feedback messages by user
+CREATE INDEX IF NOT EXISTS idx_feedback_messages_user
+  ON public.feedback_messages(user_id);
+
+-- Index for feedback messages by status
+CREATE INDEX IF NOT EXISTS idx_feedback_messages_status
+  ON public.feedback_messages(status);
+
+-- Index for feedback messages by type
+CREATE INDEX IF NOT EXISTS idx_feedback_messages_type
+  ON public.feedback_messages(type);
+
+-- Index for feedback messages by created date
+CREATE INDEX IF NOT EXISTS idx_feedback_messages_created
+  ON public.feedback_messages(created_at DESC);
+
+-- ============ ADDITIONAL TRIGGERS ============
+
+-- Function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION public.tg_update_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END $$;
+
+-- Trigger for advanced_settings
+DROP TRIGGER IF EXISTS tg_advanced_settings_updated_at ON public.advanced_settings;
+CREATE TRIGGER tg_advanced_settings_updated_at
+  BEFORE UPDATE ON public.advanced_settings
+  FOR EACH ROW
+  EXECUTE FUNCTION public.tg_update_updated_at();
+
+-- Function to update reminder updated_at timestamp
+CREATE OR REPLACE FUNCTION public.tg_update_reminder_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END $$;
+
+-- Trigger for reminders
+DROP TRIGGER IF EXISTS tg_reminders_updated_at ON public.reminders;
+CREATE TRIGGER tg_reminders_updated_at
+  BEFORE UPDATE ON public.reminders
+  FOR EACH ROW
+  EXECUTE FUNCTION public.tg_update_reminder_updated_at();
+
+-- Function to update notification preferences updated_at timestamp
+CREATE OR REPLACE FUNCTION public.tg_update_notification_preferences_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END $$;
+
+-- Trigger for notification_preferences
+DROP TRIGGER IF EXISTS tg_notification_preferences_updated_at ON public.notification_preferences;
+CREATE TRIGGER tg_notification_preferences_updated_at
+  BEFORE UPDATE ON public.notification_preferences
+  FOR EACH ROW
+  EXECUTE FUNCTION public.tg_update_notification_preferences_updated_at();
+
+-- Function to update feedback messages updated_at timestamp
+CREATE OR REPLACE FUNCTION public.tg_update_feedback_messages_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END $$;
+
+-- Trigger for feedback_messages
+DROP TRIGGER IF EXISTS tg_feedback_messages_updated_at ON public.feedback_messages;
+CREATE TRIGGER tg_feedback_messages_updated_at
+  BEFORE UPDATE ON public.feedback_messages
+  FOR EACH ROW
+  EXECUTE FUNCTION public.tg_update_feedback_messages_updated_at();
+
+-- ============ ADDITIONAL ROW LEVEL SECURITY (RLS) ============
+
+-- Enable RLS on additional tables
+ALTER TABLE public.advanced_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.crash_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reminders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notification_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.feedback_messages ENABLE ROW LEVEL SECURITY;
+
+-- ============ POLICIES FOR ADVANCED SETTINGS ============
+
+-- Allow users to select their own advanced settings
+DROP POLICY IF EXISTS "advanced_settings_select_own" ON public.advanced_settings;
+CREATE POLICY "advanced_settings_select_own"
+  ON public.advanced_settings FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Allow users to insert their own advanced settings
+DROP POLICY IF EXISTS "advanced_settings_insert_own" ON public.advanced_settings;
+CREATE POLICY "advanced_settings_insert_own"
+  ON public.advanced_settings FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- Allow users to update their own advanced settings
+DROP POLICY IF EXISTS "advanced_settings_update_own" ON public.advanced_settings;
+CREATE POLICY "advanced_settings_update_own"
+  ON public.advanced_settings FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- Allow users to delete their own advanced settings
+DROP POLICY IF EXISTS "advanced_settings_delete_own" ON public.advanced_settings;
+CREATE POLICY "advanced_settings_delete_own"
+  ON public.advanced_settings FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- ============ POLICIES FOR CRASH REPORTS ============
+
+-- Allow users to select their own crash reports
+DROP POLICY IF EXISTS "crash_reports_select_own" ON public.crash_reports;
+CREATE POLICY "crash_reports_select_own"
+  ON public.crash_reports FOR SELECT
+  USING (auth.uid() = user_id OR user_id IS NULL);
+
+-- Allow users to insert crash reports (including anonymous)
+DROP POLICY IF EXISTS "crash_reports_insert_own" ON public.crash_reports;
+CREATE POLICY "crash_reports_insert_own"
+  ON public.crash_reports FOR INSERT
+  WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+
+-- Allow users to update their own crash reports
+DROP POLICY IF EXISTS "crash_reports_update_own" ON public.crash_reports;
+CREATE POLICY "crash_reports_update_own"
+  ON public.crash_reports FOR UPDATE
+  USING (auth.uid() = user_id OR user_id IS NULL)
+  WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+
+-- Allow users to delete their own crash reports
+DROP POLICY IF EXISTS "crash_reports_delete_own" ON public.crash_reports;
+CREATE POLICY "crash_reports_delete_own"
+  ON public.crash_reports FOR DELETE
+  USING (auth.uid() = user_id OR user_id IS NULL);
+
+-- ============ POLICIES FOR REMINDERS ============
+
+-- Allow users to select their own reminders
+DROP POLICY IF EXISTS "reminders_select_own" ON public.reminders;
+CREATE POLICY "reminders_select_own"
+  ON public.reminders FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Allow users to insert their own reminders
+DROP POLICY IF EXISTS "reminders_insert_own" ON public.reminders;
+CREATE POLICY "reminders_insert_own"
+  ON public.reminders FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- Allow users to update their own reminders
+DROP POLICY IF EXISTS "reminders_update_own" ON public.reminders;
+CREATE POLICY "reminders_update_own"
+  ON public.reminders FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- Allow users to delete their own reminders
+DROP POLICY IF EXISTS "reminders_delete_own" ON public.reminders;
+CREATE POLICY "reminders_delete_own"
+  ON public.reminders FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- ============ POLICIES FOR NOTIFICATION PREFERENCES ============
+
+-- Allow users to select their own notification preferences
+DROP POLICY IF EXISTS "notification_preferences_select_own" ON public.notification_preferences;
+CREATE POLICY "notification_preferences_select_own"
+  ON public.notification_preferences FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Allow users to insert their own notification preferences
+DROP POLICY IF EXISTS "notification_preferences_insert_own" ON public.notification_preferences;
+CREATE POLICY "notification_preferences_insert_own"
+  ON public.notification_preferences FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- Allow users to update their own notification preferences
+DROP POLICY IF EXISTS "notification_preferences_update_own" ON public.notification_preferences;
+CREATE POLICY "notification_preferences_update_own"
+  ON public.notification_preferences FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- Allow users to delete their own notification preferences
+DROP POLICY IF EXISTS "notification_preferences_delete_own" ON public.notification_preferences;
+CREATE POLICY "notification_preferences_delete_own"
+  ON public.notification_preferences FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- ============ POLICIES FOR FEEDBACK MESSAGES ============
+
+-- Allow users to select their own feedback messages
+DROP POLICY IF EXISTS "feedback_messages_select_own" ON public.feedback_messages;
+CREATE POLICY "feedback_messages_select_own"
+  ON public.feedback_messages FOR SELECT
+  USING (auth.uid() = user_id OR user_id IS NULL);
+
+-- Allow users to insert feedback messages (including anonymous)
+DROP POLICY IF EXISTS "feedback_messages_insert_own" ON public.feedback_messages;
+CREATE POLICY "feedback_messages_insert_own"
+  ON public.feedback_messages FOR INSERT
+  WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+
+-- Allow users to update their own feedback messages
+DROP POLICY IF EXISTS "feedback_messages_update_own" ON public.feedback_messages;
+CREATE POLICY "feedback_messages_update_own"
+  ON public.feedback_messages FOR UPDATE
+  USING (auth.uid() = user_id OR user_id IS NULL)
+  WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+
+-- Allow users to delete their own feedback messages
+DROP POLICY IF EXISTS "feedback_messages_delete_own" ON public.feedback_messages;
+CREATE POLICY "feedback_messages_delete_own"
+  ON public.feedback_messages FOR DELETE
+  USING (auth.uid() = user_id OR user_id IS NULL);
+
+-- ============ MIGRATION: ADD AUTO_SYNC COLUMN (if needed) ============
+-- Only run this if the advanced_settings table exists without the auto_sync column
+-- This migration is safe to run multiple times due to IF NOT EXISTS
+
+ALTER TABLE public.advanced_settings 
+ADD COLUMN IF NOT EXISTS auto_sync BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- Update existing rows to have auto_sync = true (if any exist)
+UPDATE public.advanced_settings 
+SET auto_sync = TRUE 
+WHERE auto_sync IS NULL;

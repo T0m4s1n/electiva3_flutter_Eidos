@@ -284,7 +284,7 @@ class ConversationFactory {
     return ConversationLocal(
       id: id ?? IdGenerator.generateConversationId(),
       userId: userId,
-      title: title ?? 'Nueva conversación',
+      title: title ?? 'New Chat',
       model: model ?? 'gpt-4o-mini',
       summary: null,
       context: context,

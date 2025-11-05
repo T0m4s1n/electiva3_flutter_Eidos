@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/preferences_controller.dart';
@@ -5,6 +6,8 @@ import '../controllers/theme_controller.dart';
 import '../models/chat_rule.dart';
 import '../routes/app_routes.dart';
 import '../widgets/animated_icon_background.dart';
+import '../services/translation_service.dart';
+import '../widgets/theme_change_loader.dart';
 
 class PreferencesPage extends StatelessWidget {
   const PreferencesPage({super.key});
@@ -20,6 +23,10 @@ class PreferencesPage extends StatelessWidget {
       body: SafeArea(
         child: Stack(
           children: [
+            // Theme change loader overlay (fullscreen)
+            Positioned.fill(
+              child: ThemeChangeLoader(),
+            ),
             const Positioned.fill(child: ChatIconBackground()),
             Padding(
           padding: const EdgeInsets.all(16),
@@ -53,13 +60,15 @@ class PreferencesPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  Text(
-                    'Preferences',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.onSurface,
+                  Obx(
+                    () => Text(
+                      TranslationService.translate('preferences'),
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                     ),
                   ),
                 ],
@@ -73,10 +82,12 @@ class PreferencesPage extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // App Preferences Section
-                      _buildSectionHeader(
-                        context,
-                        'App Preferences',
-                        Icons.settings_outlined,
+                      Obx(
+                        () => _buildSectionHeader(
+                          context,
+                          TranslationService.translate('app_preferences'),
+                          Icons.settings_outlined,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       _buildAppPreferencesCard(
@@ -84,14 +95,18 @@ class PreferencesPage extends StatelessWidget {
                         preferencesController,
                         themeController,
                       ),
+                      const SizedBox(height: 16),
+                      _buildLanguageCard(context),
 
                       const SizedBox(height: 32),
 
                       // Chat Preferences Section
-                      _buildSectionHeader(
-                        context,
-                        'Chat Preferences',
-                        Icons.chat_outlined,
+                      Obx(
+                        () => _buildSectionHeader(
+                          context,
+                          TranslationService.translate('chat_preferences'),
+                          Icons.chat_outlined,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       _buildChatPreferencesCard(context, preferencesController),
@@ -99,10 +114,12 @@ class PreferencesPage extends StatelessWidget {
                       const SizedBox(height: 32),
 
                       // Chat Rules Section
-                      _buildSectionHeader(
-                        context,
-                        'Chat Rules',
-                        Icons.rule_outlined,
+                      Obx(
+                        () => _buildSectionHeader(
+                          context,
+                          TranslationService.translate('chat_rules'),
+                          Icons.rule_outlined,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       _buildChatRulesCard(context, preferencesController),
@@ -110,7 +127,13 @@ class PreferencesPage extends StatelessWidget {
                       const SizedBox(height: 32),
 
                       // More Section
-                      _buildSectionHeader(context, 'More', Icons.more_horiz),
+                      Obx(
+                        () => _buildSectionHeader(
+                          context,
+                          TranslationService.translate('more'),
+                          Icons.more_horiz,
+                        ),
+                      ),
                       const SizedBox(height: 16),
                       _buildMoreCard(context),
                     ],
@@ -285,24 +308,28 @@ class PreferencesPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'App Theme',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.onSurface,
+          Obx(
+            () => Text(
+              TranslationService.translate('app_theme'),
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            'Switch between light and dark mode',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 14,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.grey[400]
-                  : Colors.grey[600],
+          Obx(
+            () => Text(
+              TranslationService.translate('switch_theme'),
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[400]
+                    : Colors.grey[600],
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -320,15 +347,17 @@ class PreferencesPage extends StatelessWidget {
                       size: 20,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      themeController.isDarkMode.value
-                          ? 'Dark Mode'
-                          : 'Light Mode',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).colorScheme.onSurface,
+                    Obx(
+                      () => Text(
+                        themeController.isDarkMode.value
+                            ? TranslationService.translate('dark_mode')
+                            : TranslationService.translate('light_mode'),
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
                       ),
                     ),
                   ],
@@ -342,6 +371,130 @@ class PreferencesPage extends StatelessWidget {
                   activeColor: Theme.of(context).colorScheme.primary,
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLanguageCard(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardTheme.color,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? Colors.grey[600]!
+              : Colors.black87,
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.language,
+                color: Theme.of(context).colorScheme.primary,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Obx(
+                () => Text(
+                  TranslationService.translate('language'),
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Obx(
+            () => Text(
+              TranslationService.translate('select_app_language'),
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[400]
+                    : Colors.grey[600],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Obx(
+            () => DropdownButtonFormField<AppLanguage>(
+              value: TranslationService.currentLanguageObs.value,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[600]!
+                        : Colors.black87,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[600]!
+                        : Colors.black87,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: Theme.of(context).colorScheme.primary,
+                    width: 2,
+                  ),
+                ),
+                filled: true,
+                fillColor: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[800]
+                    : Colors.grey[50],
+              ),
+              dropdownColor: Theme.of(context).cardTheme.color,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 16,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              items: TranslationService.availableLanguages.map((language) {
+                return DropdownMenuItem<AppLanguage>(
+                  value: language,
+                  child: Text(language.displayName),
+                );
+              }).toList(),
+              onChanged: (AppLanguage? newValue) async {
+                if (newValue != null) {
+                  // Don't await to prevent blocking the UI
+                  TranslationService.setLanguage(newValue);
+                  // Show confirmation after a delay to prevent UI jank
+                  Future.delayed(const Duration(milliseconds: 300), () {
+                    Get.snackbar(
+                      TranslationService.translate('language_changed'),
+                      '${TranslationService.translate('app_language_changed_to')} ${newValue.displayName}',
+                      snackPosition: SnackPosition.BOTTOM,
+                      duration: const Duration(seconds: 2),
+                    );
+                  });
+                }
+              },
             ),
           ),
         ],
@@ -387,7 +540,7 @@ class PreferencesPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Choose the model to use (GPT available for now)',
+            'Choose the model to use (visual selection only)',
             style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 14,
@@ -436,15 +589,116 @@ class PreferencesPage extends StatelessWidget {
                 color: Theme.of(context).colorScheme.onSurface,
               ),
               items: const [
+                // OpenAI GPT Models
                 DropdownMenuItem<String>(
                   value: 'gpt-4o-mini',
-                  child: Text('gpt-4o-mini (actual)'),
+                  child: Text('GPT-4o Mini (Current)'),
                 ),
                 DropdownMenuItem<String>(
                   value: 'gpt-4o',
-                  child: Text('gpt-4o'),
+                  child: Text('GPT-4o'),
                 ),
-                DropdownMenuItem<String>(value: 'gpt-5', child: Text('gpt-5')),
+                DropdownMenuItem<String>(
+                  value: 'gpt-4-turbo',
+                  child: Text('GPT-4 Turbo'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'gpt-4',
+                  child: Text('GPT-4'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'gpt-3.5-turbo',
+                  child: Text('GPT-3.5 Turbo'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'gpt-5',
+                  child: Text('GPT-5 (Preview)'),
+                ),
+                // Anthropic Claude Models
+                DropdownMenuItem<String>(
+                  value: 'claude-3-5-sonnet-20241022',
+                  child: Text('Claude 3.5 Sonnet'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'claude-3-opus-20240229',
+                  child: Text('Claude 3 Opus'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'claude-3-sonnet-20240229',
+                  child: Text('Claude 3 Sonnet'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'claude-3-haiku-20240307',
+                  child: Text('Claude 3 Haiku'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'claude-3-5-haiku',
+                  child: Text('Claude 3.5 Haiku'),
+                ),
+                // Google Gemini Models
+                DropdownMenuItem<String>(
+                  value: 'gemini-pro',
+                  child: Text('Gemini Pro'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'gemini-ultra',
+                  child: Text('Gemini Ultra'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'gemini-flash',
+                  child: Text('Gemini Flash'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'gemini-1.5-pro',
+                  child: Text('Gemini 1.5 Pro'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'gemini-1.5-flash',
+                  child: Text('Gemini 1.5 Flash'),
+                ),
+                // Meta Llama Models
+                DropdownMenuItem<String>(
+                  value: 'llama-3-70b',
+                  child: Text('Llama 3 70B'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'llama-3-8b',
+                  child: Text('Llama 3 8B'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'llama-2-70b',
+                  child: Text('Llama 2 70B'),
+                ),
+                // Mistral AI Models
+                DropdownMenuItem<String>(
+                  value: 'mistral-large',
+                  child: Text('Mistral Large'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'mistral-medium',
+                  child: Text('Mistral Medium'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'mistral-small',
+                  child: Text('Mistral Small'),
+                ),
+                // Other Models
+                DropdownMenuItem<String>(
+                  value: 'o1-preview',
+                  child: Text('O1 Preview'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'o1-mini',
+                  child: Text('O1 Mini'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'grok-beta',
+                  child: Text('Grok Beta'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'pi-4',
+                  child: Text('Pi 4'),
+                ),
               ],
               onChanged: (String? value) {
                 if (value != null) {
@@ -455,24 +709,28 @@ class PreferencesPage extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          Text(
-            'AI Personality',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.onSurface,
+          Obx(
+            () => Text(
+              TranslationService.translate('ai_personality'),
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            'Choose how you want the AI to respond',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 14,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.grey[400]
-                  : Colors.grey[600],
+          Obx(
+            () => Text(
+              TranslationService.translate('select_ai_personality'),
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[400]
+                    : Colors.grey[600],
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -653,7 +911,7 @@ class PreferencesPage extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  'No hay reglas definidas. Toca el botón + para agregar una regla.',
+                  'No rules defined. Tap the + button to add a rule.',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 14,
@@ -790,12 +1048,14 @@ class PreferencesPage extends StatelessWidget {
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           backgroundColor: Theme.of(context).cardTheme.color,
-          title: Text(
-            'Add Rule',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.onSurface,
+          title: Obx(
+            () => Text(
+              '${TranslationService.translate('add')} ${TranslationService.translate('chat_rules').toLowerCase().replaceAll('chat rules', 'Rule')}',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
           ),
           content: Column(
@@ -853,36 +1113,40 @@ class PreferencesPage extends StatelessWidget {
             ],
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'Cancel',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Theme.of(context).colorScheme.onSurface,
+            Obx(
+              () => TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(
+                  TranslationService.translate('cancel'),
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
                 ),
               ),
             ),
-            ElevatedButton(
-              onPressed: () async {
-                if (textController.text.trim().isNotEmpty) {
-                  await controller.addChatRule(
-                    textController.text.trim(),
-                    isPositive,
-                  );
-                  Navigator.of(context).pop();
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-              ),
-              child: Text(
-                'Add',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.black87
-                      : Colors.white,
+            Obx(
+              () => ElevatedButton(
+                onPressed: () async {
+                  if (textController.text.trim().isNotEmpty) {
+                    await controller.addChatRule(
+                      textController.text.trim(),
+                      isPositive,
+                    );
+                    Navigator.of(context).pop();
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                ),
+                child: Text(
+                  TranslationService.translate('add'),
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.black87
+                        : Colors.white,
+                  ),
                 ),
               ),
             ),
@@ -903,12 +1167,14 @@ class PreferencesPage extends StatelessWidget {
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           backgroundColor: Theme.of(context).cardTheme.color,
-          title: Text(
-            'Edit Rule',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.onSurface,
+          title: Obx(
+            () => Text(
+              '${TranslationService.translate('edit')} ${TranslationService.translate('chat_rules').toLowerCase().replaceAll('chat rules', 'Rule')}',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
           ),
           content: Column(
@@ -966,37 +1232,41 @@ class PreferencesPage extends StatelessWidget {
             ],
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'Cancel',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Theme.of(context).colorScheme.onSurface,
+            Obx(
+              () => TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(
+                  TranslationService.translate('cancel'),
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
                 ),
               ),
             ),
-            ElevatedButton(
-              onPressed: () async {
-                if (textController.text.trim().isNotEmpty) {
-                  await Get.find<PreferencesController>().updateChatRule(
-                    rule.id,
-                    textController.text.trim(),
-                    isPositive,
-                  );
-                  Navigator.of(context).pop();
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-              ),
-              child: Text(
-                'Save',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.black87
-                      : Colors.white,
+            Obx(
+              () => ElevatedButton(
+                onPressed: () async {
+                  if (textController.text.trim().isNotEmpty) {
+                    await Get.find<PreferencesController>().updateChatRule(
+                      rule.id,
+                      textController.text.trim(),
+                      isPositive,
+                    );
+                    Navigator.of(context).pop();
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                ),
+                child: Text(
+                  TranslationService.translate('save'),
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.black87
+                        : Colors.white,
+                  ),
                 ),
               ),
             ),
@@ -1011,14 +1281,16 @@ class PreferencesPage extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Theme.of(context).cardTheme.color,
-        title: Text(
-          'Delete Rule',
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontWeight: FontWeight.w600,
-            color: Theme.of(context).colorScheme.onSurface,
+          title: Obx(
+            () => Text(
+              '${TranslationService.translate('delete')} ${TranslationService.translate('chat_rules').toLowerCase().replaceAll('chat rules', 'Rule')}',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
           ),
-        ),
         content: Text(
           'Are you sure you want to delete this rule?',
           style: TextStyle(
@@ -1027,25 +1299,29 @@ class PreferencesPage extends StatelessWidget {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                color: Theme.of(context).colorScheme.onSurface,
+          Obx(
+            () => TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                TranslationService.translate('cancel'),
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
               ),
             ),
           ),
-          ElevatedButton(
-            onPressed: () async {
-              await Get.find<PreferencesController>().deleteChatRule(rule.id);
-              Navigator.of(context).pop();
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text(
-              'Delete',
-              style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+          Obx(
+            () => ElevatedButton(
+              onPressed: () async {
+                await Get.find<PreferencesController>().deleteChatRule(rule.id);
+                Navigator.of(context).pop();
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: Text(
+                TranslationService.translate('delete'),
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+              ),
             ),
           ),
         ],

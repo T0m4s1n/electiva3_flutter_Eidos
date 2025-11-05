@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../services/chat_database.dart';
 import '../services/sync_service.dart';
 import '../services/auth_service.dart';
+import '../services/advanced_settings_service.dart';
 import '../models/chat_models.dart';
 
 class ChatService {
@@ -29,12 +30,17 @@ class ChatService {
     
     debugPrint('ChatService.createConversation - Saved to local database');
     
-    // Sync to Supabase if user is logged in
+    // Auto-sync to Supabase if user is logged in and auto-sync is enabled
     if (userId != null) {
       try {
-        debugPrint('ChatService.createConversation - Uploading to Supabase');
-        await _syncService.syncPending();
-        debugPrint('ChatService.createConversation - Uploaded to Supabase');
+        final bool autoSyncEnabled = await AdvancedSettingsService.isAutoSyncEnabled();
+        if (autoSyncEnabled) {
+          debugPrint('ChatService.createConversation - Auto-syncing to Supabase');
+          await _syncService.syncPending();
+          debugPrint('ChatService.createConversation - Auto-synced to Supabase');
+        } else {
+          debugPrint('ChatService.createConversation - Auto-sync disabled, skipping Supabase sync');
+        }
       } catch (e) {
         debugPrint('ChatService.createConversation - Error syncing to Supabase: $e');
         // Don't throw error, local save is primary
@@ -93,11 +99,16 @@ class ChatService {
     debugPrint('ChatService.addMessage - Message saved successfully: ${message.id}');
     debugPrint('ChatService.addMessage - Total messages in conversation: ${savedMessages.length}');
 
-    // Sync to Supabase if user is logged in
+    // Auto-sync to Supabase if user is logged in and auto-sync is enabled
     final String? userId = AuthService.currentUser?.id;
     if (userId != null) {
       try {
-        debugPrint('ChatService.addMessage - Syncing to Supabase (PUSH only, no PULL)');
+        final bool autoSyncEnabled = await AdvancedSettingsService.isAutoSyncEnabled();
+        if (!autoSyncEnabled) {
+          debugPrint('ChatService.addMessage - Auto-sync disabled, skipping Supabase sync');
+          return message;
+        }
+        debugPrint('ChatService.addMessage - Auto-syncing to Supabase (PUSH only, no PULL)');
         await _syncService.pushPendingData(userId);
         debugPrint('ChatService.addMessage - Synced to Supabase');
       } catch (e) {
@@ -156,10 +167,17 @@ class ChatService {
       'updated_at': now,
     });
 
-    // Sincronizar si está logueado
+    // Auto-sync if logged in and auto-sync is enabled
     final String? userId = AuthService.currentUser?.id;
     if (userId != null) {
-      await _syncService.syncPending();
+      try {
+        final bool autoSyncEnabled = await AdvancedSettingsService.isAutoSyncEnabled();
+        if (autoSyncEnabled) {
+          await _syncService.syncPending();
+        }
+      } catch (e) {
+        debugPrint('ChatService.updateConversationTitle - Error syncing: $e');
+      }
     }
   }
 
@@ -170,10 +188,17 @@ class ChatService {
   ) async {
     await ChatDatabase.updateConversationSummary(conversationId, summary);
 
-    // Sincronizar si está logueado
+    // Auto-sync if logged in and auto-sync is enabled
     final String? userId = AuthService.currentUser?.id;
     if (userId != null) {
-      await _syncService.syncPending();
+      try {
+        final bool autoSyncEnabled = await AdvancedSettingsService.isAutoSyncEnabled();
+        if (autoSyncEnabled) {
+          await _syncService.syncPending();
+        }
+      } catch (e) {
+        debugPrint('ChatService.updateConversationSummary - Error syncing: $e');
+      }
     }
   }
 
@@ -189,10 +214,17 @@ class ChatService {
       'updated_at': now,
     });
 
-    // Sincronizar si está logueado
+    // Auto-sync if logged in and auto-sync is enabled
     final String? userId = AuthService.currentUser?.id;
     if (userId != null) {
-      await _syncService.syncPending();
+      try {
+        final bool autoSyncEnabled = await AdvancedSettingsService.isAutoSyncEnabled();
+        if (autoSyncEnabled) {
+          await _syncService.syncPending();
+        }
+      } catch (e) {
+        debugPrint('ChatService.toggleConversationArchive - Error syncing: $e');
+      }
     }
   }
 
@@ -200,10 +232,17 @@ class ChatService {
   static Future<void> deleteMessage(String messageId) async {
     await ChatDatabase.markMessageAsDeleted(messageId);
 
-    // Sincronizar si está logueado
+    // Auto-sync if logged in and auto-sync is enabled
     final String? userId = AuthService.currentUser?.id;
     if (userId != null) {
-      await _syncService.syncPending();
+      try {
+        final bool autoSyncEnabled = await AdvancedSettingsService.isAutoSyncEnabled();
+        if (autoSyncEnabled) {
+          await _syncService.syncPending();
+        }
+      } catch (e) {
+        debugPrint('ChatService.deleteMessage - Error syncing: $e');
+      }
     }
   }
 
@@ -214,12 +253,17 @@ class ChatService {
     try {
       final String? userId = AuthService.currentUser?.id;
       
-      // Delete from Supabase if user is logged in
+      // Delete from Supabase if user is logged in and auto-sync is enabled
       if (userId != null) {
         try {
-          debugPrint('Deleting conversation from Supabase: $conversationId');
-          await _syncService.deleteConversationFromCloud(conversationId);
-          debugPrint('Successfully deleted from Supabase');
+          final bool autoSyncEnabled = await AdvancedSettingsService.isAutoSyncEnabled();
+          if (autoSyncEnabled) {
+            debugPrint('Deleting conversation from Supabase: $conversationId');
+            await _syncService.deleteConversationFromCloud(conversationId);
+            debugPrint('Successfully deleted from Supabase');
+          } else {
+            debugPrint('Auto-sync disabled, skipping Supabase delete');
+          }
         } catch (e) {
           debugPrint('Error deleting from Supabase: $e');
           // Continue with local delete even if Supabase delete fails

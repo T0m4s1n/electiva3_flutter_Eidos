@@ -15,6 +15,8 @@ import 'onboarding_page.dart';
 import '../routes/app_routes.dart';
 import '../services/chat_service.dart';
 import '../models/chat_models.dart';
+import '../services/translation_service.dart';
+import '../widgets/theme_change_loader.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -60,9 +62,9 @@ class _HomePageState extends State<HomePage> {
 
       // Show loading screen if initial loading
       if (appController.isInitialLoading.value) {
-        return const LoadingScreen(
-          message: 'Welcome to Eidos',
-          duration: Duration(milliseconds: 300),
+        return LoadingScreen(
+          message: TranslationService.translate('welcome_to_eidos'),
+          duration: const Duration(milliseconds: 300),
         );
       }
 
@@ -71,6 +73,10 @@ class _HomePageState extends State<HomePage> {
         body: SafeArea(
           child: Stack(
             children: [
+              // Theme change loader overlay (fullscreen)
+              Positioned.fill(
+                child: ThemeChangeLoader(),
+              ),
               Column(
                 children: [
                   // Custom animated header - only show when not in edit profile
@@ -115,10 +121,11 @@ class _HomePageState extends State<HomePage> {
                       !navController.showChatView.value)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                      child: TextField(
-                        controller: _chatSearchController,
-                        decoration: InputDecoration(
-                          hintText: 'Search chats...',
+                      child: Obx(
+                        () => TextField(
+                          controller: _chatSearchController,
+                          decoration: InputDecoration(
+                            hintText: TranslationService.translate('search_chats'),
                           prefixIcon: const Icon(Icons.search, size: 18),
                           filled: true,
                           fillColor: Theme.of(context).brightness == Brightness.dark
@@ -142,29 +149,30 @@ class _HomePageState extends State<HomePage> {
                           ),
                           contentPadding:
                               const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        ),
-                        onSubmitted: (q) async {
-                          final List<ConversationLocal> convs =
-                              await ChatService.getConversations();
-                          final String query = q.trim().toLowerCase();
-                          ConversationLocal? match;
-                          for (final c in convs) {
-                            final title = (c.title ?? '').toLowerCase();
-                            if (title.contains(query)) {
-                              match = c;
-                              break;
+                          ),
+                          onSubmitted: (q) async {
+                            final List<ConversationLocal> convs =
+                                await ChatService.getConversations();
+                            final String query = q.trim().toLowerCase();
+                            ConversationLocal? match;
+                            for (final c in convs) {
+                              final title = (c.title ?? '').toLowerCase();
+                              if (title.contains(query)) {
+                                match = c;
+                                break;
+                              }
                             }
-                          }
-                          if (match != null) {
-                            final chatController = Get.find<ChatController>();
-                            await chatController.loadConversation(match.id);
-                            navController.showChat();
-                            final state = _headerKey.currentState;
-                            try {
-                              (state as dynamic).closeMenuExternal();
-                            } catch (_) {}
-                          }
-                        },
+                            if (match != null) {
+                              final chatController = Get.find<ChatController>();
+                              await chatController.loadConversation(match.id);
+                              navController.showChat();
+                              final state = _headerKey.currentState;
+                              try {
+                                (state as dynamic).closeMenuExternal();
+                              } catch (_) {}
+                            }
+                          },
+                        ),
                       ),
                     ),
 
@@ -196,7 +204,7 @@ class _HomePageState extends State<HomePage> {
                                   children: [
                                     Icon(Icons.folder_copy_outlined, color: Theme.of(context).iconTheme.color, size: 18),
                                     const SizedBox(width: 8),
-                                    const Text('Documents', style: TextStyle(fontFamily: 'Poppins', fontSize: 14)),
+                                    Obx(() => Text(TranslationService.translate('documents'), style: const TextStyle(fontFamily: 'Poppins', fontSize: 14))),
                                   ],
                                 ),
                               ),
@@ -224,7 +232,7 @@ class _HomePageState extends State<HomePage> {
                                   children: [
                                     Icon(Icons.analytics_outlined, color: Theme.of(context).iconTheme.color, size: 18),
                                     const SizedBox(width: 8),
-                                    const Text('Analytics', style: TextStyle(fontFamily: 'Poppins', fontSize: 14)),
+                                    Obx(() => Text(TranslationService.translate('analytics'), style: const TextStyle(fontFamily: 'Poppins', fontSize: 14))),
                                   ],
                                 ),
                               ),

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../services/hive_storage_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:convert';
 import 'dart:io';
 import '../services/chat_service.dart';
 import '../services/document_service.dart';
+import '../services/hive_storage_service.dart';
+import '../services/reminder_service.dart';
 import '../models/chat_models.dart';
 import '../controllers/navigation_controller.dart';
 import '../controllers/preferences_controller.dart';
@@ -58,7 +59,7 @@ class ChatController extends GetxController {
       final ConversationLocal conversation =
           await ChatService.createConversation(
             title: 'New Chat',
-            model: HiveStorageService.loadModel(),
+            model: 'gpt-4o-mini', // Visual selection only - actual model is always gpt-4o-mini
           );
 
       // Verify the conversation was saved to the database
@@ -196,17 +197,178 @@ class ChatController extends GetxController {
         // Scroll to bottom
         _scrollToBottom();
 
-        // Wait a bit longer to ensure the message is fully saved and indexed in the database
-        await Future.delayed(const Duration(milliseconds: 300));
+        // Check for reminder request before sending to AI
+        // Pass document mode context to help differentiate between reminder requests and document editing
+        final reminderData = ReminderService.parseReminderFromMessage(
+          messageText,
+          isDocumentMode: isDocumentMode.value,
+        );
+        if (reminderData != null) {
+          try {
+            final reminderDate = reminderData['reminder_date'] as DateTime;
+            final reminderTitle = reminderData['title'] as String;
+            
+            await ReminderService.createReminderFromChat(
+              title: reminderTitle,
+              description: reminderData['description'] as String?,
+              reminderDate: reminderDate,
+              conversationId: currentConversationId.value,
+              messageId: userMessage.id,
+            );
 
-        // Get AI response - pass the message text explicitly to ensure it's used
-        await _getAIResponse(messageText);
+            // Calculate time until reminder
+            final DateTime now = DateTime.now();
+            final Duration timeUntilReminder = reminderDate.difference(now);
+            final String timeUntilReminderText = _formatTimeUntilReminder(timeUntilReminder);
+
+            // Add confirmation message to chat
+            final MessageLocal confirmationMessage = await ChatService.createAssistantMessage(
+              conversationId: currentConversationId.value,
+              text: '✅ Reminder created: "$reminderTitle" at ${_formatReminderDate(reminderDate)}',
+            );
+            messages.add(confirmationMessage);
+            hasMessages.value = true;
+            _scrollToBottom();
+
+            // Show snackbar
+            Get.snackbar(
+              'Reminder Created',
+              'Reminder set for ${_formatReminderDate(reminderDate)}',
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.green[100],
+              colorText: Colors.green[800],
+              duration: const Duration(seconds: 2),
+            );
+
+            // Still get AI response with reminder context
+            // Add a system message about the reminder so AI can mention when notification will be sent
+            final String reminderContextMessage = 'A reminder has been created: "$reminderTitle" scheduled for ${_formatReminderDate(reminderDate)}. The user will receive a notification in $timeUntilReminderText. Acknowledge this and let them know when they will receive the notification.';
+            
+            await Future.delayed(const Duration(milliseconds: 300));
+            await _getAIResponseWithReminderContext(reminderContextMessage, messageText);
+          } catch (e) {
+            debugPrint('Error creating reminder: $e');
+            Get.snackbar(
+              'Error',
+              'Failed to create reminder: $e',
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.red[100],
+              colorText: Colors.red[800],
+              duration: const Duration(seconds: 2),
+            );
+            // Continue with normal AI response
+            await Future.delayed(const Duration(milliseconds: 300));
+            await _getAIResponse(messageText);
+          }
+        } else {
+          // Wait a bit longer to ensure the message is fully saved and indexed in the database
+          await Future.delayed(const Duration(milliseconds: 300));
+
+          // Get AI response - pass the message text explicitly to ensure it's used
+          await _getAIResponse(messageText);
+        }
       }
     } catch (e) {
       debugPrint('Error sending message: $e');
       _showErrorSnackbar('Error sending message');
     } finally {
       isLoading.value = false;
+    }
+  }
+
+  /// Get AI response with reminder context
+  Future<void> _getAIResponseWithReminderContext(String reminderContext, String userMessage) async {
+    if (openaiKey == null) {
+      _showErrorSnackbar('OpenAI API key not configured');
+      return;
+    }
+
+    try {
+      isTyping.value = true;
+
+      // Clear system error messages
+      await ChatService.clearSystemErrorMessages(currentConversationId.value);
+
+      // Get conversation context
+      final List<Map<String, dynamic>> formattedMessages = messages
+          .map(
+            (MessageLocal msg) => {
+              'id': msg.id,
+              'role': msg.role,
+              'content': msg.content,
+              'created_at': msg.createdAt,
+              'seq': msg.seq,
+            },
+          )
+          .toList();
+
+      // Build messages for OpenAI with reminder context
+      final List<Map<String, String>> openaiMessages = [
+        {
+          'role': 'system',
+          'content': 'You are a helpful AI assistant. When a reminder has been created, acknowledge it and let the user know when they will receive the notification. Be concise and friendly.',
+        },
+        {
+          'role': 'system',
+          'content': reminderContext,
+        },
+        ...formattedMessages.map((msg) {
+          final content = msg['content'];
+          String textContent = '';
+          if (content is Map) {
+            textContent = content['text'] as String? ?? content.toString();
+          } else {
+            textContent = content.toString();
+          }
+
+          return {
+            'role': msg['role'] as String,
+            'content': _cleanMessageContent(textContent),
+          };
+        }).toList(),
+        {
+          'role': 'user',
+          'content': _cleanMessageContent(userMessage),
+        },
+      ];
+
+      // Filter valid messages
+      final List<Map<String, String>> validMessages = openaiMessages
+          .where(
+            (msg) =>
+                msg['content'] != null &&
+                msg['content']!.isNotEmpty &&
+                msg['content']!.length <= 4000,
+          )
+          .toList();
+
+      // Call OpenAI API
+      debugPrint('Calling OpenAI API with reminder context');
+      final String aiResponse = await _callOpenAIAPI(validMessages);
+
+      // Validate the response
+      if (aiResponse.isEmpty || aiResponse.trim().isEmpty || aiResponse == '0') {
+        throw Exception('Invalid or empty response from AI');
+      }
+
+      final MessageLocal aiMessage = await ChatService.createAssistantMessage(
+        conversationId: currentConversationId.value,
+        text: aiResponse,
+      );
+
+      messages.add(aiMessage);
+      await Future.delayed(const Duration(milliseconds: 200));
+      _scrollToBottom();
+    } catch (e) {
+      debugPrint('Error getting AI response with reminder context: $e');
+      final MessageLocal errorMessage = await ChatService.createSystemMessage(
+        conversationId: currentConversationId.value,
+        text: 'Sorry, I encountered an error. Please try again.',
+      );
+      messages.add(errorMessage);
+      _scrollToBottom();
+    } finally {
+      isTyping.value = false;
     }
   }
 
@@ -495,10 +657,11 @@ class ChatController extends GetxController {
 
       // Set request body
       final Map<String, dynamic> requestBody = {
-        'model': HiveStorageService.loadModel(),
+        'model': 'gpt-4o-mini', // Visual selection only - actual model is always gpt-4o-mini
         'messages': messages,
-        'max_tokens': 1000,
-        'temperature': 0.7,
+        'max_tokens': HiveStorageService.loadMaxTokens(),
+        'temperature': 0.7, // Default value
+        'top_p': 1.0, // Default value
       };
 
       final String jsonBody = jsonEncode(requestBody);
@@ -704,7 +867,7 @@ class ChatController extends GetxController {
       final ConversationLocal conversation =
           await ChatService.createConversation(
             title: 'Document Editor',
-            model: HiveStorageService.loadModel(),
+            model: 'gpt-4o-mini', // Visual selection only - actual model is always gpt-4o-mini
           );
 
       debugPrint('Created new document conversation: ${conversation.id}');
@@ -878,10 +1041,11 @@ Keep it concise, relevant, and focused on the specific document type requested.'
       request.headers.set('User-Agent', 'Eidos-Chat-App/1.0');
 
       final Map<String, dynamic> requestBody = {
-        'model': HiveStorageService.loadModel(),
+        'model': 'gpt-4o-mini', // Visual selection only - actual model is always gpt-4o-mini
         'messages': messages,
-        'max_tokens': 200,
-        'temperature': 0.7,
+        'max_tokens': 200, // Checklist generation uses shorter responses
+        'temperature': 0.7, // Default value
+        'top_p': 1.0, // Default value
       };
 
       request.write(jsonEncode(requestBody));
@@ -982,10 +1146,11 @@ Make it comprehensive and ready to use with proper markdown formatting.''',
       request.headers.set('User-Agent', 'Eidos-Chat-App/1.0');
 
       final Map<String, dynamic> requestBody = {
-        'model': HiveStorageService.loadModel(),
+        'model': 'gpt-4o-mini', // Visual selection only - actual model is always gpt-4o-mini
         'messages': messages,
-        'max_tokens': 2000,
-        'temperature': 0.7,
+        'max_tokens': HiveStorageService.loadMaxTokens(),
+        'temperature': 0.7, // Default value
+        'top_p': 1.0, // Default value
       };
 
       request.write(jsonEncode(requestBody));
@@ -1246,5 +1411,54 @@ Make it comprehensive and ready to use with proper markdown formatting.''',
         ) // Control characters
         .replaceAll(RegExp(r'\s+'), ' ') // Multiple spaces to single space
         .trim();
+  }
+
+  /// Format time until reminder
+  String _formatTimeUntilReminder(Duration duration) {
+    if (duration.inMinutes < 1) {
+      return 'less than a minute';
+    } else if (duration.inMinutes < 60) {
+      final minutes = duration.inMinutes;
+      return '$minutes ${minutes == 1 ? 'minute' : 'minutes'}';
+    } else if (duration.inHours < 24) {
+      final hours = duration.inHours;
+      final minutes = duration.inMinutes % 60;
+      if (minutes == 0) {
+        return '$hours ${hours == 1 ? 'hour' : 'hours'}';
+      } else {
+        return '$hours ${hours == 1 ? 'hour' : 'hours'} and $minutes ${minutes == 1 ? 'minute' : 'minutes'}';
+      }
+    } else {
+      final days = duration.inDays;
+      final hours = duration.inHours % 24;
+      if (hours == 0) {
+        return '$days ${days == 1 ? 'day' : 'days'}';
+      } else {
+        return '$days ${days == 1 ? 'day' : 'days'} and $hours ${hours == 1 ? 'hour' : 'hours'}';
+      }
+    }
+  }
+
+  /// Format reminder date for display
+  String _formatReminderDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final reminderDay = DateTime(date.year, date.month, date.day);
+    final difference = reminderDay.difference(today).inDays;
+
+    if (difference == 0) {
+      // Today
+      return 'today at ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    } else if (difference == 1) {
+      // Tomorrow
+      return 'tomorrow at ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    } else if (difference < 7) {
+      // This week
+      final weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      return '${weekdays[date.weekday - 1]} at ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    } else {
+      // Future date
+      return '${date.day}/${date.month}/${date.year} at ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    }
   }
 }

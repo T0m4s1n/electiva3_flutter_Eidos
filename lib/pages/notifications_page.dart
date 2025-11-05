@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import '../widgets/animated_icon_background.dart';
+import '../services/notification_preferences_service.dart';
+import '../services/auth_service.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -10,15 +13,132 @@ class NotificationsPage extends StatefulWidget {
 
 class _NotificationsPageState extends State<NotificationsPage> {
   bool _enablePush = true;
-  bool _enableEmail = false;
   bool _enableInApp = true;
   bool _sound = true;
   bool _vibration = true;
   TimeOfDay _quietStart = const TimeOfDay(hour: 22, minute: 0);
   TimeOfDay _quietEnd = const TimeOfDay(hour: 7, minute: 0);
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    setState(() => _isLoading = true);
+    try {
+      if (AuthService.isLoggedIn) {
+        // Load from Supabase
+        final preferences = await NotificationPreferencesService.getNotificationPreferences();
+        if (preferences != null) {
+          setState(() {
+            _enablePush = preferences['enable_push'] as bool? ?? true;
+            _enableInApp = preferences['enable_in_app'] as bool? ?? true;
+            _sound = preferences['enable_sound'] as bool? ?? true;
+            _vibration = preferences['enable_vibration'] as bool? ?? true;
+            final quietHoursEnabled = preferences['quiet_hours_enabled'] as bool? ?? false;
+            if (quietHoursEnabled) {
+              _quietStart = TimeOfDay(
+                hour: preferences['quiet_start_hour'] as int? ?? 22,
+                minute: preferences['quiet_start_minute'] as int? ?? 0,
+              );
+              _quietEnd = TimeOfDay(
+                hour: preferences['quiet_end_hour'] as int? ?? 7,
+                minute: preferences['quiet_end_minute'] as int? ?? 0,
+              );
+            }
+          });
+          debugPrint('NotificationPreferencesService: Loaded preferences from Supabase');
+        }
+      } else {
+        // Load from local storage as fallback
+        // Note: Local storage for notification preferences can be added to HiveStorageService if needed
+        debugPrint('NotificationPreferencesService: User not logged in, using defaults');
+      }
+    } catch (e) {
+      debugPrint('NotificationPreferencesService: Error loading preferences - $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _savePreferences() async {
+    try {
+      if (AuthService.isLoggedIn) {
+        // Save to Supabase
+        await NotificationPreferencesService.saveNotificationPreferences(
+          enablePush: _enablePush,
+          enableInApp: _enableInApp,
+          enableSound: _sound,
+          enableVibration: _vibration,
+          quietHoursEnabled: true, // Assume enabled if user sets times
+          quietStartHour: _quietStart.hour,
+          quietStartMinute: _quietStart.minute,
+          quietEndHour: _quietEnd.hour,
+          quietEndMinute: _quietEnd.minute,
+        );
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Notification settings saved successfully', style: TextStyle(fontFamily: 'Poppins')),
+              duration: Duration(seconds: 1),
+            ),
+          );
+          
+          // Navigate back after a short delay
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (mounted) {
+            Get.back();
+          }
+        }
+      } else {
+        // Save to local storage as fallback
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Notification settings saved locally (login to sync)', style: TextStyle(fontFamily: 'Poppins')),
+              duration: Duration(seconds: 1),
+            ),
+          );
+          
+          // Navigate back after a short delay
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (mounted) {
+            Get.back();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('NotificationPreferencesService: Error saving preferences - $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving preferences: $e', style: const TextStyle(fontFamily: 'Poppins')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        appBar: AppBar(
+          title: const Text('Notifications', style: TextStyle(fontFamily: 'Poppins')),
+          backgroundColor: Theme.of(context).cardTheme.color,
+          foregroundColor: Theme.of(context).colorScheme.onSurface,
+          elevation: 0,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -40,8 +160,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 _buildSectionHeader(context, Icons.notifications_active_outlined, 'Channels'),
                 const SizedBox(height: 12),
                 _buildSwitch(context, 'Push notifications', 'Receive push alerts on your device', _enablePush, (v) => setState(() => _enablePush = v)),
-                const SizedBox(height: 8),
-                _buildSwitch(context, 'Email', 'Get updates via email', _enableEmail, (v) => setState(() => _enableEmail = v)),
                 const SizedBox(height: 8),
                 _buildSwitch(context, 'In-app banners', 'Show banners inside the app', _enableInApp, (v) => setState(() => _enableInApp = v)),
 
@@ -198,11 +316,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
         const SizedBox(width: 12),
         Expanded(
           child: ElevatedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Notification settings saved (local only)', style: TextStyle(fontFamily: 'Poppins'))),
-              );
-            },
+            onPressed: _savePreferences,
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.black87,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:get/get.dart';
 import '../widgets/animated_icon_background.dart';
+import '../services/feedback_service.dart';
 
 class FeedbackSupportPage extends StatefulWidget {
   const FeedbackSupportPage({super.key});
@@ -456,9 +458,47 @@ class _FeedbackSupportPageState extends State<FeedbackSupportPage> {
 
   Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() {
-      _submitted = true;
-    });
+
+    try {
+      // Show loading
+      Get.dialog(
+        const Center(child: CircularProgressIndicator()),
+        barrierDismissible: false,
+      );
+
+      // Submit feedback to Supabase
+      await FeedbackService.submitFeedback(
+        type: _type,
+        severity: _severity,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        contactEmail: _emailController.text.trim().isEmpty 
+            ? null 
+            : _emailController.text.trim(),
+        attachments: _attachments.isNotEmpty ? _attachments : null,
+      );
+
+      // Close loading dialog
+      Get.back();
+
+      // Show success
+      setState(() {
+        _submitted = true;
+      });
+    } catch (e) {
+      // Close loading dialog
+      Get.back();
+
+      // Show error
+      Get.snackbar(
+        'Error',
+        'Failed to submit feedback: $e',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red[100],
+        colorText: Colors.red[800],
+        duration: const Duration(seconds: 3),
+      );
+    }
   }
 
   Widget _buildSuccessView(BuildContext context) {

@@ -3,6 +3,7 @@ import 'package:lottie/lottie.dart';
 import 'package:get/get.dart';
 import '../controllers/theme_controller.dart';
 import '../routes/app_routes.dart';
+import '../services/translation_service.dart';
 
 class AnimatedHeader extends StatefulWidget {
   final VoidCallback? onLogin;
@@ -412,15 +413,17 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                      Text(
-                                        'Account',
-                                        style: TextStyle(
-                                          fontFamily: 'Poppins',
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.onSurface,
+                                      Obx(
+                                        () => Text(
+                                          TranslationService.translate('account'),
+                                          style: TextStyle(
+                                            fontFamily: 'Poppins',
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
+                                          ),
                                         ),
                                       ),
                                       const SizedBox(height: 16),
@@ -452,17 +455,19 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
-                                              Text(
-                                                widget.userName.isNotEmpty
-                                                    ? widget.userName
-                                                    : 'User',
-                                                style: TextStyle(
-                                                  fontFamily: 'Poppins',
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Theme.of(
-                                                    context,
-                                                  ).colorScheme.onSurface,
+                                              Obx(
+                                                () => Text(
+                                                  widget.userName.isNotEmpty
+                                                      ? widget.userName
+                                                      : TranslationService.translate('user'),
+                                                  style: TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Theme.of(
+                                                      context,
+                                                    ).colorScheme.onSurface,
+                                                  ),
                                                 ),
                                               ),
                                               const SizedBox(height: 4),
@@ -488,7 +493,7 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                         // Edit profile button
                                         _buildSkeletonButton(
                                           icon: Icons.edit_outlined,
-                                          text: 'Edit Profile',
+                                          textKey: 'edit_profile',
                                           onTap: () {
                                             _closeMenu();
                                             Future.delayed(
@@ -505,7 +510,7 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                         // Preferences button
                                         _buildSkeletonButton(
                                           icon: Icons.settings_outlined,
-                                          text: 'Preferences',
+                                          textKey: 'preferences',
                                           onTap: () {
                                             _closeMenu();
                                             Future.delayed(
@@ -522,7 +527,7 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                         // Logout button
                                         _buildSkeletonButton(
                                           icon: Icons.logout,
-                                          text: 'Log Out',
+                                          textKey: 'log_out',
                                           onTap: () {
                                             _closeMenu();
                                             Future.delayed(
@@ -542,7 +547,7 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                   // Create new chat button
                                   _buildSkeletonButton(
                                     icon: Icons.add_circle_outline,
-                                    text: 'Create New Chat',
+                                    textKey: 'create_new_chat',
                                     onTap: () {
                                       // Close menu first
                                       _closeMenu();
@@ -562,7 +567,7 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                   // Tools navigation
                                   _buildSkeletonButton(
                                     icon: Icons.archive_outlined,
-                                    text: 'Chat Archive',
+                                    textKey: 'chat_archive',
                                     onTap: () {
                                       _closeMenu();
                                       Future.delayed(const Duration(milliseconds: 150), () {
@@ -593,11 +598,17 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
 
   Widget _buildSkeletonButton({
     required IconData icon,
-    required String text,
+    String? text,
+    String? textKey,
     required VoidCallback onTap,
     bool isPrimary = false,
   }) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // If textKey is provided, use translation; otherwise use text directly
+    final String buttonText = textKey != null 
+        ? TranslationService.translate(textKey)
+        : (text ?? '');
 
     return GestureDetector(
       onTap: onTap,
@@ -631,16 +642,24 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
               size: 20,
             ),
             const SizedBox(width: 16),
-            Text(
-              text,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: isPrimary
-                    ? (isDark ? Colors.black87 : Colors.white)
-                    : (isDark ? Colors.white : Colors.black87),
-              ),
+            Obx(
+              () {
+                // Re-translate the text when language changes
+                final translatedText = textKey != null
+                    ? TranslationService.translate(textKey)
+                    : buttonText;
+                return Text(
+                  translatedText,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: isPrimary
+                        ? (isDark ? Colors.black87 : Colors.white)
+                        : (isDark ? Colors.white : Colors.black87),
+                  ),
+                );
+              },
             ),
           ],
         ),

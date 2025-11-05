@@ -6,8 +6,8 @@ import '../controllers/navigation_controller.dart';
 import '../models/chat_models.dart';
 import '../services/chat_service.dart';
 import '../services/chat_database.dart';
-import '../services/auth_service.dart';
 import 'animated_icon_background.dart';
+import '../services/translation_service.dart';
 
 class ConversationsList extends StatefulWidget {
   const ConversationsList({super.key});
@@ -181,8 +181,8 @@ class _ConversationsListState extends State<ConversationsList>
       
       // Show error to user
       Get.snackbar(
-        'Error',
-        'Failed to delete conversation',
+        TranslationService.translate('error'),
+        TranslationService.translate('failed_to_delete_conversation'),
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red[100],
         colorText: Colors.red[800],
@@ -202,51 +202,14 @@ class _ConversationsListState extends State<ConversationsList>
     }
   }
 
-  Future<void> _syncToSupabase() async {
-    try {
-      setState(() {
-        isLoading.value = true;
-      });
-      
-      await AuthService.syncPendingData();
-      
-      // Reload conversations after sync
-      await _loadConversations();
-      
-      if (mounted) {
-        Get.snackbar(
-          'Success',
-          'Chats synced to Supabase',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.green[100],
-          colorText: Colors.green[800],
-          duration: const Duration(seconds: 2),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error syncing to Supabase: $e');
-      if (mounted) {
-        Get.snackbar(
-          'Error',
-          'Failed to sync chats: $e',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red[100],
-          colorText: Colors.red[800],
-          duration: const Duration(seconds: 3),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          isLoading.value = false;
-        });
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     return Obx(() {
+      // Filter out archived conversations
+      final visibleConversations = conversations.where((c) => !c.isArchived).toList();
+      final bool hasVisibleConversations = visibleConversations.isNotEmpty;
+      
       return Stack(
         children: [
           // Animated background
@@ -257,7 +220,7 @@ class _ConversationsListState extends State<ConversationsList>
           // Main content
           if (isLoading.value)
             const Center(child: CircularProgressIndicator())
-          else if (conversations.isEmpty)
+          else if (!hasVisibleConversations)
             _buildEmptyState()
           else
             RefreshIndicator(
@@ -271,25 +234,14 @@ class _ConversationsListState extends State<ConversationsList>
               child: ListView.builder(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
-                itemCount: conversations.where((c) => !c.isArchived).length,
+                itemCount: visibleConversations.length,
                 itemBuilder: (context, index) {
-                  final visible = conversations.where((c) => !c.isArchived).toList();
-                  final conversation = visible[index];
+                  final conversation = visibleConversations[index];
                   return _buildConversationCard(conversation);
                 },
               ),
             ),
           
-          // Floating action button to sync
-          Positioned(
-            bottom: 20,
-            right: 20,
-            child: FloatingActionButton(
-              onPressed: _syncToSupabase,
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              child: const Icon(Icons.cloud_upload, color: Colors.white),
-            ),
-          ),
         ],
       );
     });
@@ -319,21 +271,25 @@ class _ConversationsListState extends State<ConversationsList>
             ),
           ),
           const SizedBox(height: 16),
-          Text(
-            'No conversations yet',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 18,
-              color: isDark ? Colors.grey[400] : Colors.grey[600],
+          Obx(
+            () => Text(
+              TranslationService.translate('no_conversations_yet'),
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 18,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            'Start a new chat to begin',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 14,
-              color: isDark ? Colors.grey[500] : Colors.grey[500],
+          Obx(
+            () => Text(
+              TranslationService.translate('start_chat_prompt'),
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+                color: isDark ? Colors.grey[500] : Colors.grey[500],
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -348,15 +304,17 @@ class _ConversationsListState extends State<ConversationsList>
                   color: isDark ? Colors.white : Colors.black87,
                 ),
               ),
-              child: Text(
-                'Start New Chat',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.black87 : Colors.white,
-                ),
-              ),
+              child:                   Obx(
+                    () => Text(
+                      TranslationService.translate('start_new_chat'),
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.black87 : Colors.white,
+                      ),
+                    ),
+                  ),
             ),
           ),
         ],
