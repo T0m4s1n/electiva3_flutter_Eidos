@@ -94,24 +94,32 @@ class SyncService {
     debugPrint('📤 Found ${convs.length} conversations to push');
 
     if (convs.isNotEmpty) {
-      final List<Map<String, dynamic>> payload = convs
-          .map(
-            (Map<String, Object?> c) => {
-              'id': c['id'],
-              'user_id': c['user_id'],
-              'title': c['title'],
-              'model': c['model'],
-              'summary': c['summary'],
-              'context': c['context'],
-              'is_archived': (c['is_archived'] as int? ?? 0) == 1,
-              'last_message_at': c['last_message_at'],
-              'created_at': c['created_at'],
-              'updated_at': c['updated_at'],
-            },
-          )
-          .toList();
+      // Process conversations in batches to avoid blocking UI
+      const int batchSize = 50;
+      for (int i = 0; i < convs.length; i += batchSize) {
+        final end = (i + batchSize).clamp(0, convs.length);
+        final List<Map<String, dynamic>> payload = convs
+            .sublist(i, end)
+            .map(
+              (Map<String, Object?> c) => {
+                'id': c['id'],
+                'user_id': c['user_id'],
+                'title': c['title'],
+                'model': c['model'],
+                'summary': c['summary'],
+                'context': c['context'],
+                'is_archived': (c['is_archived'] as int? ?? 0) == 1,
+                'last_message_at': c['last_message_at'],
+                'created_at': c['created_at'],
+                'updated_at': c['updated_at'],
+              },
+            )
+            .toList();
 
-      await supabase.from('conversations').upsert(payload, onConflict: 'id');
+        await supabase.from('conversations').upsert(payload, onConflict: 'id');
+        // Yield to UI thread between batches
+        await Future.delayed(const Duration(milliseconds: 10));
+      }
       debugPrint('✅ Pushed ${convs.length} conversations to cloud');
     }
 
@@ -128,7 +136,7 @@ class SyncService {
       debugPrint('📤 Found ${msgs.length} messages to push');
 
       if (msgs.isNotEmpty) {
-        const int batchSize = 500;
+        const int batchSize = 100;
         int totalPushed = 0;
         for (int i = 0; i < msgs.length; i += batchSize) {
           final List<Map<String, Object?>> slice = msgs.sublist(
@@ -156,12 +164,22 @@ class SyncService {
           debugPrint(
             '📤 Pushed batch ${(i ~/ batchSize) + 1}: ${slice.length} messages',
           );
+          // Yield to UI thread between batches
+          await Future.delayed(const Duration(milliseconds: 10));
         }
 
-        final List<String> ids = msgs
-            .map((Map<String, Object?> m) => m['id'] as String)
-            .toList();
-        await ChatDatabase.markMessagesSynced(ids);
+        // Mark messages as synced in batches
+        const int syncBatchSize = 100;
+        for (int i = 0; i < msgs.length; i += syncBatchSize) {
+          final end = (i + syncBatchSize).clamp(0, msgs.length);
+          final List<String> ids = msgs
+              .sublist(i, end)
+              .map((Map<String, Object?> m) => m['id'] as String)
+              .toList();
+          await ChatDatabase.markMessagesSynced(ids);
+          // Yield to UI thread between batches
+          await Future.delayed(const Duration(milliseconds: 10));
+        }
         debugPrint(
           '✅ Pushed $totalPushed messages to cloud and marked as synced',
         );
@@ -177,53 +195,79 @@ class SyncService {
     );
     final Database db = await ChatDatabase.instance;
 
-    // 1) Conversations
+    // 1) Conversations - batch in smaller chunks to avoid blocking
     final List<Map<String, dynamic>> convs = await supabase
         .from('conversations')
         .select()
         .eq('user_id', userId);
     if (convs.isNotEmpty) {
-      final Batch batch = db.batch();
-      for (final Map<String, dynamic> c in convs) {
-        batch.insert('conversations', {
-          'id': c['id'],
-          'user_id': c['user_id'],
-          'title': c['title'],
-          'model': c['model'],
-          'summary': c['summary'],
-          'context': c['context'],
-          'is_archived': (c['is_archived'] == true) ? 1 : 0,
-          'last_message_at': c['last_message_at'],
-          'created_at': c['created_at'],
-          'updated_at': c['updated_at'],
-        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      // Process in batches to avoid blocking UI
+      const int batchSize = 50;
+      for (int i = 0; i < convs.length; i += batchSize) {
+        final batch = db.batch();
+        final end = (i + batchSize).clamp(0, convs.length);
+        for (int j = i; j < end; j++) {
+          final c = convs[j];
+          batch.insert('conversations', {
+            'id': c['id'],
+            'user_id': c['user_id'],
+            'title': c['title'],
+            'model': c['model'],
+            'summary': c['summary'],
+            'context': c['context'],
+            'is_archived': (c['is_archived'] == true) ? 1 : 0,
+            'last_message_at': c['last_message_at'],
+            'created_at': c['created_at'],
+            'updated_at': c['updated_at'],
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+        await batch.commit(noResult: true);
+        // Yield to UI thread between batches
+        await Future.delayed(const Duration(milliseconds: 10));
       }
-      await batch.commit(noResult: true);
     }
 
-    final List<Map<String, dynamic>> msgs = await supabase
-        .from('messages')
-        .select()
-        .inFilter(
-          'conversation_id',
-          convs.map((Map<String, dynamic> e) => e['id']).toList(),
-        );
-    if (msgs.isNotEmpty) {
-      final Batch batch = db.batch();
-      for (final Map<String, dynamic> m in msgs) {
-        batch.insert('messages', {
-          'id': m['id'],
-          'conversation_id': m['conversation_id'],
-          'role': m['role'],
-          'content': jsonEncode(m['content']),
-          'created_at': m['created_at'],
-          'seq': m['seq'],
-          'parent_id': m['parent_id'],
-          'status': m['status'] ?? 'ok',
-          'is_deleted': (m['is_deleted'] == true) ? 1 : 0,
-        }, conflictAlgorithm: ConflictAlgorithm.replace);
+    // 2) Messages - only fetch if we have conversations
+    if (convs.isNotEmpty) {
+      final List<String> convIds = convs.map((Map<String, dynamic> e) => e['id'] as String).toList();
+      
+      // Fetch messages in batches to avoid large queries
+      const int messageBatchSize = 100;
+      for (int i = 0; i < convIds.length; i += messageBatchSize) {
+        final end = (i + messageBatchSize).clamp(0, convIds.length);
+        final batchIds = convIds.sublist(i, end);
+        
+        final List<Map<String, dynamic>> msgs = await supabase
+            .from('messages')
+            .select()
+            .inFilter('conversation_id', batchIds);
+            
+        if (msgs.isNotEmpty) {
+          // Process messages in smaller batches
+          const int insertBatchSize = 50;
+          for (int j = 0; j < msgs.length; j += insertBatchSize) {
+            final batch = db.batch();
+            final endMsg = (j + insertBatchSize).clamp(0, msgs.length);
+            for (int k = j; k < endMsg; k++) {
+              final m = msgs[k];
+              batch.insert('messages', {
+                'id': m['id'],
+                'conversation_id': m['conversation_id'],
+                'role': m['role'],
+                'content': jsonEncode(m['content']),
+                'created_at': m['created_at'],
+                'seq': m['seq'],
+                'parent_id': m['parent_id'],
+                'status': m['status'] ?? 'ok',
+                'is_deleted': (m['is_deleted'] == true) ? 1 : 0,
+              }, conflictAlgorithm: ConflictAlgorithm.replace);
+            }
+            await batch.commit(noResult: true);
+            // Yield to UI thread between batches
+            await Future.delayed(const Duration(milliseconds: 10));
+          }
+        }
       }
-      await batch.commit(noResult: true);
     }
   }
 
@@ -251,6 +295,35 @@ class SyncService {
       debugPrint(
         '❌ SyncService.syncPending - Error during background sync: $e',
       );
+    }
+  }
+
+  /// Manual full sync: push all local data and pull all cloud data
+  Future<void> manualSync() async {
+    debugPrint('🔄 SyncService.manualSync - Starting manual full sync');
+    final String? userId = supabase.auth.currentUser?.id;
+    if (userId == null) {
+      debugPrint(
+        '⚠️ SyncService.manualSync - No user logged in, skipping sync',
+      );
+      throw Exception('User not logged in');
+    }
+
+    try {
+      debugPrint('🔄 Step 1: Pushing all local data to cloud');
+      await pushAll(userId);
+
+      debugPrint('🔄 Step 2: Pulling all cloud data to local');
+      await pullAll(userId);
+
+      debugPrint(
+        '✅ SyncService.manualSync - Manual sync completed successfully',
+      );
+    } catch (e) {
+      debugPrint(
+        '❌ SyncService.manualSync - Error during manual sync: $e',
+      );
+      rethrow;
     }
   }
 

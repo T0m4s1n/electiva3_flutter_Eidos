@@ -213,6 +213,14 @@ class AuthService {
     await _syncService.syncPending();
   }
 
+  // Manual full sync: push all local data and pull all cloud data
+  static Future<void> manualSync() async {
+    if (!isLoggedIn) {
+      throw Exception('User not logged in');
+    }
+    await _syncService.manualSync();
+  }
+
   // Obtener el servicio de sincronización para uso avanzado
   static SyncService get syncService => _syncService;
 }

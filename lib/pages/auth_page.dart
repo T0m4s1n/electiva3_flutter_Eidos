@@ -781,6 +781,8 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                 'User';
             final email = response.user!.email ?? '';
 
+            // Don't wait for sync - let it happen in background
+            // This prevents blocking the UI thread
             widget.onLoginSuccess!(name, email);
           }
         } else {

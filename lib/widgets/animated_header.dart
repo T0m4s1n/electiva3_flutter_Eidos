@@ -454,6 +454,7 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                           child: Column(
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
                                             children: [
                                               Obx(
                                                 () => Text(
@@ -468,6 +469,8 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                                       context,
                                                     ).colorScheme.onSurface,
                                                   ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
                                                 ),
                                               ),
                                               const SizedBox(height: 4),
@@ -484,6 +487,8 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                                       ? Colors.grey[400]
                                                       : Colors.grey[600],
                                                 ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
                                               ),
                                             ],
                                           ),
@@ -642,24 +647,28 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
               size: 20,
             ),
             const SizedBox(width: 16),
-            Obx(
-              () {
-                // Re-translate the text when language changes
-                final translatedText = textKey != null
-                    ? TranslationService.translate(textKey)
-                    : buttonText;
-                return Text(
-                  translatedText,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: isPrimary
-                        ? (isDark ? Colors.black87 : Colors.white)
-                        : (isDark ? Colors.white : Colors.black87),
-                  ),
-                );
-              },
+            Expanded(
+              child: Obx(
+                () {
+                  // Re-translate the text when language changes
+                  final translatedText = textKey != null
+                      ? TranslationService.translate(textKey)
+                      : buttonText;
+                  return Text(
+                    translatedText,
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: isPrimary
+                          ? (isDark ? Colors.black87 : Colors.white)
+                          : (isDark ? Colors.white : Colors.black87),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  );
+                },
+              ),
             ),
           ],
         ),

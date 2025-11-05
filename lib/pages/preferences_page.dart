@@ -7,6 +7,7 @@ import '../models/chat_rule.dart';
 import '../routes/app_routes.dart';
 import '../widgets/animated_icon_background.dart';
 import '../services/translation_service.dart';
+import '../services/auth_service.dart';
 import '../widgets/theme_change_loader.dart';
 
 class PreferencesPage extends StatelessWidget {
@@ -60,14 +61,18 @@ class PreferencesPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  Obx(
-                    () => Text(
-                      TranslationService.translate('preferences'),
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
+                  Expanded(
+                    child: Obx(
+                      () => Text(
+                        TranslationService.translate('preferences'),
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ),
@@ -193,9 +198,171 @@ class PreferencesPage extends StatelessWidget {
             subtitle: 'Report issues or request features',
             route: AppRoutes.feedback,
           ),
+          const Divider(height: 24),
+          _buildSyncButton(context),
         ],
       ),
     );
+  }
+
+  Widget _buildSyncButton(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final RxBool isSyncing = false.obs;
+    
+    return Obx(() {
+      final bool syncing = isSyncing.value;
+      
+      return GestureDetector(
+        onTap: syncing ? null : () async {
+          // Check if user is logged in
+          if (!AuthService.isLoggedIn) {
+            Get.snackbar(
+              TranslationService.translate('error'),
+              TranslationService.translate('must_be_logged_in_to_sync'),
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.red[100],
+              colorText: Colors.red[800],
+            );
+            return;
+          }
+
+          isSyncing.value = true;
+          
+          try {
+            // Show loading dialog
+            Get.dialog(
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  margin: const EdgeInsets.symmetric(horizontal: 40),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 16),
+                      Text(
+                        TranslationService.translate('syncing_data'),
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 16,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              barrierDismissible: false,
+            );
+
+            // Perform sync
+            await AuthService.manualSync();
+            
+            // Close loading dialog
+            Get.back();
+
+            // Show success message
+            Get.snackbar(
+              TranslationService.translate('success'),
+              TranslationService.translate('sync_completed_successfully'),
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.green[100],
+              colorText: Colors.green[800],
+              duration: const Duration(seconds: 2),
+            );
+          } catch (e) {
+            // Close loading dialog if still open
+            if (Get.isDialogOpen ?? false) {
+              Get.back();
+            }
+            
+            // Show error message
+            Get.snackbar(
+              TranslationService.translate('error'),
+              TranslationService.translate('sync_failed'),
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.red[100],
+              colorText: Colors.red[800],
+              duration: const Duration(seconds: 3),
+            );
+          } finally {
+            isSyncing.value = false;
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: syncing 
+                ? (isDark ? Colors.grey[800] : Colors.grey[200])
+                : (isDark ? const Color(0xFF2C2C2C) : Colors.grey[100]),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark ? Colors.grey[600]! : Colors.black87,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF2C2C2C) : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark ? Colors.grey[600]! : Colors.black87,
+                  ),
+                ),
+                child: syncing
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        Icons.sync,
+                        color: Theme.of(context).iconTheme.color,
+                        size: 20,
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      TranslationService.translate('sync_with_cloud'),
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      syncing
+                          ? TranslationService.translate('syncing_data')
+                          : TranslationService.translate('sync_all_data_with_cloud'),
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 13,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (!syncing)
+                Icon(Icons.chevron_right, color: Theme.of(context).iconTheme.color),
+            ],
+          ),
+        ),
+      );
+    });
   }
 
   Widget _buildNavTile(

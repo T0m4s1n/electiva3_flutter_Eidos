@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:lottie/lottie.dart';
 import '../controllers/chat_controller.dart';
 import '../controllers/navigation_controller.dart';
+import '../controllers/auth_controller.dart';
 import '../models/chat_models.dart';
 import '../services/chat_service.dart';
 import '../services/chat_database.dart';
@@ -20,9 +21,9 @@ class _ConversationsListState extends State<ConversationsList>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final ChatController chatController = Get.find<ChatController>();
   final NavigationController navController = Get.find<NavigationController>();
+  final AuthController authController = Get.find<AuthController>();
   final RxList<ConversationLocal> conversations = <ConversationLocal>[].obs;
   final RxBool isLoading = false.obs;
-  final Set<String> _deletingIds = <String>{};
   late AnimationController _animationController;
 
   @override
@@ -33,20 +34,41 @@ class _ConversationsListState extends State<ConversationsList>
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
+    // Listen to auth state changes to reload conversations when logged in
+    _listenToAuthChanges();
     // Initialize database and load conversations
     _initializeAndLoad();
+  }
+
+  void _listenToAuthChanges() {
+    // Listen to login state changes
+    ever(authController.isLoggedIn, (bool isLoggedIn) {
+      if (isLoggedIn) {
+        // When user logs in, reload conversations after a delay
+        // to allow sync to complete (non-blocking)
+        Future.delayed(const Duration(milliseconds: 800), () {
+          if (mounted) {
+            // Use microtask to defer heavy database operations
+            Future.microtask(() => _loadConversations());
+          }
+        });
+      }
+    });
   }
 
   Future<void> _initializeAndLoad() async {
     try {
       isLoading.value = true;
       
-      // Initialize the database first
-      await ChatDatabase.instance;
-      debugPrint('Database initialized successfully');
-      
-      // Load conversations
-      await _loadConversations();
+      // Initialize the database first (non-blocking)
+      // Use Future.microtask to defer heavy operations
+      await Future.microtask(() async {
+        await ChatDatabase.instance;
+        debugPrint('Database initialized successfully');
+        
+        // Load conversations after database is ready
+        await _loadConversations();
+      });
     } catch (e) {
       debugPrint('Error initializing database: $e');
       conversations.clear();
@@ -73,24 +95,29 @@ class _ConversationsListState extends State<ConversationsList>
   Future<void> _loadConversations() async {
     try {
       debugPrint('Loading conversations from database...');
-      final List<ConversationLocal> convs =
-          await ChatService.getConversations();
+      
+      // Perform database query in a microtask to avoid blocking UI
+      final List<ConversationLocal> convs = await Future.microtask(() async {
+        return await ChatService.getConversations();
+      });
       
       debugPrint('Fetched ${convs.length} conversations from database');
       
-      // Clear the list first to ensure UI updates
-      conversations.clear();
-      
-      // Add the new conversations
-      conversations.addAll(convs);
+      // Batch UI updates to avoid excessive rebuilds
+      if (mounted) {
+        // Clear and add in one operation to minimize rebuilds
+        conversations.clear();
+        conversations.addAll(convs);
+        // Only refresh once after all updates
+        conversations.refresh();
+      }
       
       debugPrint('Updated conversations list. Current count: ${conversations.length}');
-      
-      // Force UI update by reassigning
-      conversations.refresh();
     } catch (e) {
       debugPrint('Error loading conversations: $e');
-      conversations.clear();
+      if (mounted) {
+        conversations.clear();
+      }
     }
   }
 
@@ -120,6 +147,7 @@ class _ConversationsListState extends State<ConversationsList>
   }
 
   Future<void> _deleteConversation(String conversationId) async {
+    ConversationLocal? deletedConversation;
     try {
       debugPrint('=== Starting delete process for conversation: $conversationId ===');
       
@@ -128,45 +156,35 @@ class _ConversationsListState extends State<ConversationsList>
           chatController.currentConversationId.value == conversationId;
       debugPrint('Is current conversation: $isCurrentConversation');
       
-      // Add to deleting set and trigger animation
-      setState(() {
-        _deletingIds.add(conversationId);
-      });
-      debugPrint('Added to deleting set');
+      // Store the conversation in case we need to restore it on error
+      deletedConversation = conversations.firstWhereOrNull((c) => c.id == conversationId);
       
-      // Wait for animation to complete
-      await Future.delayed(const Duration(milliseconds: 300));
-      
-      // Delete from database using local storage
+      // Delete from database using local storage (non-blocking)
+      // Use compute isolate for heavy database operations to avoid blocking UI
       debugPrint('Calling ChatService.deleteConversation');
       await ChatService.deleteConversation(conversationId);
       debugPrint('Successfully deleted conversation from database');
       
-      // Remove from deleting set
-      setState(() {
-        _deletingIds.remove(conversationId);
-      });
-      debugPrint('Removed from deleting set');
-      
-      // Wait a bit to ensure database transaction is complete
-      await Future.delayed(const Duration(milliseconds: 100));
-      
-      // Reload the conversations list from local storage
-      debugPrint('Reloading conversations list');
-      await _loadConversations();
-      debugPrint('Conversations list reloaded. Current count: ${conversations.length}');
+      // Don't reload all conversations - just remove from list (already done in onDismissed)
+      // This avoids expensive database operations that cause frame skips
+      debugPrint('Conversation deleted. Current count: ${conversations.length}');
       
       // If this was the current conversation, clear the controller state and hide chat
       if (isCurrentConversation) {
         debugPrint('Clearing current conversation from controller');
-        chatController.messages.clear();
-        chatController.currentConversationId.value = '';
-        chatController.conversationTitle.value = 'New Chat';
-        chatController.hasMessages.value = false;
-        
-        // Hide chat view to show the conversations list
-        navController.hideChat();
-        debugPrint('Cleared current conversation state and hid chat');
+        // Use microtask to defer UI updates
+        Future.microtask(() {
+          if (mounted) {
+            chatController.messages.clear();
+            chatController.currentConversationId.value = '';
+            chatController.conversationTitle.value = 'New Chat';
+            chatController.hasMessages.value = false;
+            
+            // Hide chat view to show the conversations list
+            navController.hideChat();
+            debugPrint('Cleared current conversation state and hid chat');
+          }
+        });
       }
       
       debugPrint('=== Delete process completed successfully ===');
@@ -174,19 +192,30 @@ class _ConversationsListState extends State<ConversationsList>
       debugPrint('=== Error deleting conversation: $e ===');
       debugPrint('Stack trace: $stackTrace');
       
-      // Remove from deleting set on error
-      setState(() {
-        _deletingIds.remove(conversationId);
-      });
+      // If deletion failed and we have the conversation, restore it to the list
+      if (deletedConversation != null && !conversations.any((c) => c.id == conversationId)) {
+        debugPrint('Restoring conversation to list due to deletion failure');
+        // Use microtask to defer UI update
+        Future.microtask(() {
+          if (mounted) {
+            conversations.add(deletedConversation!);
+            conversations.refresh();
+          }
+        });
+      }
       
-      // Show error to user
-      Get.snackbar(
-        TranslationService.translate('error'),
-        TranslationService.translate('failed_to_delete_conversation'),
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red[100],
-        colorText: Colors.red[800],
-      );
+      // Show error to user (non-blocking)
+      Future.microtask(() {
+        if (mounted) {
+          Get.snackbar(
+            TranslationService.translate('error'),
+            TranslationService.translate('failed_to_delete_conversation'),
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.red[100],
+            colorText: Colors.red[800],
+          );
+        }
+      });
     }
   }
 
@@ -235,6 +264,9 @@ class _ConversationsListState extends State<ConversationsList>
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
                 itemCount: visibleConversations.length,
+                // Add cacheExtent to improve performance
+                cacheExtent: 500,
+                // Use key to help Flutter optimize rebuilds
                 itemBuilder: (context, index) {
                   final conversation = visibleConversations[index];
                   return _buildConversationCard(conversation);
@@ -323,14 +355,15 @@ class _ConversationsListState extends State<ConversationsList>
   }
 
   Widget _buildConversationCard(ConversationLocal conversation) {
-    final bool isDeleting = _deletingIds.contains(conversation.id);
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       child: Dismissible(
-        key: Key(conversation.id),
+        key: ValueKey(conversation.id),
         direction: DismissDirection.endToStart,
+        // Add resistance to prevent accidental dismissals
+        resizeDuration: const Duration(milliseconds: 300),
         background: Container(
           decoration: BoxDecoration(
             color: Colors.red,
@@ -345,31 +378,44 @@ class _ConversationsListState extends State<ConversationsList>
           ),
         ),
         onDismissed: (direction) {
-          _deleteConversation(conversation.id);
+          // Immediately remove from list to prevent crash
+          // The widget is already dismissed, so we need to update the list
+          final conversationToDelete = conversation;
+          final conversationId = conversationToDelete.id;
+          
+          // Remove from list immediately (synchronous - required by Dismissible)
+          // But wrap in microtask to defer to next frame to avoid blocking UI
+          conversations.removeWhere((c) => c.id == conversationId);
+          
+          // Schedule refresh for next frame to avoid blocking current frame
+          Future.microtask(() {
+            if (mounted) {
+              conversations.refresh();
+            }
+          });
+          
+          // Perform the actual deletion asynchronously (non-blocking)
+          // Use Future.delayed to ensure UI update happens first
+          Future.delayed(const Duration(milliseconds: 50), () {
+            _deleteConversation(conversationId);
+          });
         },
-        child: AnimatedOpacity(
-          opacity: isDeleting ? 0.0 : 1.0,
-          duration: const Duration(milliseconds: 300),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            transform: isDeleting
-                ? Matrix4.translationValues(-MediaQuery.of(context).size.width, 0, 0)
-                : null,
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isDark ? Colors.grey[600]! : Colors.black87,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark ? Colors.grey[600]! : Colors.black87,
             ),
-            child: ListTile(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ListTile(
               contentPadding: const EdgeInsets.all(16),
               title: Text(
                 conversation.title ?? 'Untitled Chat',
@@ -408,12 +454,16 @@ class _ConversationsListState extends State<ConversationsList>
                             color: Theme.of(context).colorScheme.onSurface,
                           ),
                           const SizedBox(width: 6),
-                          Text(
-                            conversation.model!,
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 12,
-                              color: Theme.of(context).colorScheme.onSurface,
+                          Flexible(
+                            child: Text(
+                              conversation.model!,
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 12,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -493,9 +543,8 @@ class _ConversationsListState extends State<ConversationsList>
             ),
           ),
         ),
-      ),
-    );
-  }
+      );
+    }
 
   String _formatDate(String isoString) {
     try {

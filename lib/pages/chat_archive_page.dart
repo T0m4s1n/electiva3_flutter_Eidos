@@ -5,6 +5,7 @@ import '../models/chat_models.dart';
 import '../controllers/chat_controller.dart';
 import '../controllers/navigation_controller.dart';
 import '../widgets/animated_icon_background.dart';
+import '../services/translation_service.dart';
 
 class ChatArchivePage extends StatefulWidget {
   const ChatArchivePage({super.key});
@@ -61,7 +62,14 @@ class _ChatArchivePageState extends State<ChatArchivePage> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Archived Chats', style: TextStyle(fontFamily: 'Poppins')),
+        title: Obx(
+          () => Text(
+            TranslationService.translate('archived_chats'),
+            style: const TextStyle(fontFamily: 'Poppins'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
         backgroundColor: Theme.of(context).cardTheme.color,
         foregroundColor: Theme.of(context).colorScheme.onSurface,
         elevation: 0,
@@ -76,11 +84,15 @@ class _ChatArchivePageState extends State<ChatArchivePage> {
             const Center(child: CircularProgressIndicator())
           else if (_archived.isEmpty)
             Center(
-              child: Text(
-                'No archived chats',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+              child: Obx(
+                () => Text(
+                  TranslationService.translate('no_archived_chats'),
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             )
@@ -111,6 +123,8 @@ class _ChatArchivePageState extends State<ChatArchivePage> {
                           ? Text(
                               c.lastMessageAt!,
                               style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: isDark ? Colors.grey[500] : Colors.grey[600]),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             )
                           : null,
                       trailing: PopupMenuButton<String>(
@@ -125,23 +139,41 @@ class _ChatArchivePageState extends State<ChatArchivePage> {
                           }
                         },
                         itemBuilder: (context) => [
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: 'unarchive',
-                            child: Row(
-                              children: [
-                                Icon(Icons.unarchive),
-                                SizedBox(width: 8),
-                                Text('Unarchive'),
-                              ],
+                            child: Obx(
+                              () => Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.unarchive),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      TranslationService.translate('unarchive'),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: 'delete',
                             child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.delete, color: Colors.red),
-                                SizedBox(width: 8),
-                                Text('Delete'),
+                                const Icon(Icons.delete, color: Colors.red),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Obx(
+                                    () => Text(
+                                      TranslationService.translate('delete'),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
                               ],
                             ),
                           ),

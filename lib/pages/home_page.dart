@@ -17,6 +17,7 @@ import '../services/chat_service.dart';
 import '../models/chat_models.dart';
 import '../services/translation_service.dart';
 import '../widgets/theme_change_loader.dart';
+import '../services/auth_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -176,7 +177,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
 
-                  // Quick actions below search (Documents / Analytics)
+                  // Quick actions below search (Documents / Analytics / Sync)
                   if (!navController.showEditProfile.value &&
                       !navController.showChatView.value)
                     Padding(
@@ -201,10 +202,18 @@ class _HomePageState extends State<HomePage> {
                                 ),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(Icons.folder_copy_outlined, color: Theme.of(context).iconTheme.color, size: 18),
                                     const SizedBox(width: 8),
-                                    Obx(() => Text(TranslationService.translate('documents'), style: const TextStyle(fontFamily: 'Poppins', fontSize: 14))),
+                                    Flexible(
+                                      child: Obx(() => Text(
+                                        TranslationService.translate('documents'),
+                                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      )),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -229,10 +238,18 @@ class _HomePageState extends State<HomePage> {
                                 ),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(Icons.analytics_outlined, color: Theme.of(context).iconTheme.color, size: 18),
                                     const SizedBox(width: 8),
-                                    Obx(() => Text(TranslationService.translate('analytics'), style: const TextStyle(fontFamily: 'Poppins', fontSize: 14))),
+                                    Flexible(
+                                      child: Obx(() => Text(
+                                        TranslationService.translate('analytics'),
+                                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      )),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -244,15 +261,28 @@ class _HomePageState extends State<HomePage> {
 
                   // Main content
                   Expanded(
-                    child: Obx(() {
-                      if (navController.showEditProfile.value) {
-                        return const EditProfilePage();
-                      } else if (navController.showChatView.value) {
-                        return const ChatPage();
-                      } else {
-                        return const ConversationsList();
-                      }
-                    }),
+                    child: Stack(
+                      children: [
+                        Obx(() {
+                          // Use ValueKey to prevent unnecessary rebuilds
+                          if (navController.showEditProfile.value) {
+                            return const EditProfilePage(key: ValueKey('edit_profile'));
+                          } else if (navController.showChatView.value) {
+                            return const ChatPage(key: ValueKey('chat'));
+                          } else {
+                            return const ConversationsList(key: ValueKey('conversations'));
+                          }
+                        }),
+                        // Sync button in bottom right corner
+                        if (!navController.showEditProfile.value &&
+                            !navController.showChatView.value)
+                          Positioned(
+                            bottom: 16,
+                            right: 16,
+                            child: _buildSyncButton(context),
+                          ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -301,6 +331,136 @@ class _HomePageState extends State<HomePage> {
                 return const SizedBox.shrink();
               }),
             ],
+          ),
+        ),
+      );
+    });
+  }
+
+  Widget _buildSyncButton(BuildContext context) {
+    final RxBool isSyncing = false.obs;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Obx(() {
+      final bool syncing = isSyncing.value;
+      
+      return GestureDetector(
+        onTap: syncing ? null : () async {
+          // Check if user is logged in
+          if (!AuthService.isLoggedIn) {
+            Get.snackbar(
+              TranslationService.translate('error'),
+              TranslationService.translate('must_be_logged_in_to_sync'),
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.red[100],
+              colorText: Colors.red[800],
+            );
+            return;
+          }
+
+          isSyncing.value = true;
+          
+          try {
+            // Show loading dialog
+            Get.dialog(
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  margin: const EdgeInsets.symmetric(horizontal: 40),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 16),
+                      Text(
+                        TranslationService.translate('syncing_data'),
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 16,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              barrierDismissible: false,
+            );
+
+            // Perform sync
+            await AuthService.manualSync();
+            
+            // Close loading dialog
+            Get.back();
+            
+            // Reload conversations list
+            // The conversations list will automatically reload when sync completes
+            // No need to manually reload it
+
+            // Show success message
+            Get.snackbar(
+              TranslationService.translate('success'),
+              TranslationService.translate('sync_completed_successfully'),
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.green[100],
+              colorText: Colors.green[800],
+              duration: const Duration(seconds: 2),
+            );
+          } catch (e) {
+            // Close loading dialog if still open
+            if (Get.isDialogOpen ?? false) {
+              Get.back();
+            }
+            
+            // Show error message
+            Get.snackbar(
+              TranslationService.translate('error'),
+              TranslationService.translate('sync_failed'),
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.red[100],
+              colorText: Colors.red[800],
+              duration: const Duration(seconds: 3),
+            );
+          } finally {
+            isSyncing.value = false;
+          }
+        },
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: syncing
+                ? (isDark ? Colors.grey[800] : Colors.grey[300])
+                : (isDark ? const Color(0xFF2C2C2C) : Colors.white),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark ? Colors.grey[600]! : Colors.black87,
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Center(
+            child: syncing
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    Icons.sync,
+                    color: Theme.of(context).iconTheme.color,
+                    size: 24,
+                  ),
           ),
         ),
       );

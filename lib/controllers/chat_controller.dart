@@ -124,9 +124,48 @@ class ChatController extends GetxController {
       'generate a document',
       'compose a document',
       'draft a document',
+      'write me a',
+      'create me a',
+      'make me a',
+      'generate me a',
+      'draft me a',
     ];
 
     return documentKeywords.any((keyword) => lowerMessage.contains(keyword));
+  }
+
+  /// Check if message contains document-related keywords
+  /// Used to skip reminder detection when document keywords are present
+  bool _hasDocumentKeywords(String messageText) {
+    final String lowerMessage = messageText.toLowerCase();
+
+    final List<String> documentKeywords = [
+      'document',
+      'text',
+      'write',
+      'create',
+      'draft',
+      'compose',
+      'generate',
+      'redact',
+      'documento',
+      'texto',
+      'escribir',
+      'crear',
+      'redactar',
+      'componer',
+      'generar',
+    ];
+
+    // Check if document keywords appear with high priority (near the start of the message)
+    // This helps distinguish "create a document" from "remind me to create..."
+    final bool hasPriorityKeywords = documentKeywords.any((keyword) {
+      final index = lowerMessage.indexOf(keyword);
+      // If keyword appears in first 30 characters, it's likely a document request
+      return index != -1 && index < 30;
+    });
+
+    return hasPriorityKeywords;
   }
 
   /// Send a message to the chat
@@ -140,7 +179,8 @@ class ChatController extends GetxController {
       // Clear input
       messageController.clear();
 
-      // Check if message is requesting document creation
+      // PRIORITY 1: Check if message is requesting document creation
+      // This must be checked FIRST to avoid reminder detection interfering
       final bool isDocumentRequest = _isDocumentRequest(messageText);
 
       // Check if we're in document mode OR if this is a document request
@@ -152,56 +192,62 @@ class ChatController extends GetxController {
         }
 
         // In document mode, generate document with checklist
+        // Skip reminder detection entirely when in document mode
         await generateDocumentWithChecklist(messageText);
-      } else {
-        // Regular chat mode
-        // Add user message to the chat
+        return; // Exit early - don't process as regular chat
+      }
 
-        final MessageLocal userMessage = await ChatService.createUserMessage(
-          conversationId: currentConversationId.value,
-          text: messageText,
-        );
+      // Regular chat mode (NOT document mode)
+      // Add user message to the chat
 
-        // Verify the message was saved to database
-        await Future.delayed(
-          const Duration(milliseconds: 200),
-        ); // Give time for DB to save
-        final List<MessageLocal> verifyMessages = await ChatService.getMessages(
-          currentConversationId.value,
-        );
-        final int userMsgCount = verifyMessages
-            .where((m) => m.role == 'user')
-            .length;
-        debugPrint(
-          'Verification: Found ${verifyMessages.length} total messages in database',
-        );
-        debugPrint(
-          'Verification: Found $userMsgCount user messages in database',
-        );
+      final MessageLocal userMessage = await ChatService.createUserMessage(
+        conversationId: currentConversationId.value,
+        text: messageText,
+      );
 
-        messages.add(userMessage);
-        hasMessages.value = true;
+      // Verify the message was saved to database
+      await Future.delayed(
+        const Duration(milliseconds: 200),
+      ); // Give time for DB to save
+      final List<MessageLocal> verifyMessages = await ChatService.getMessages(
+        currentConversationId.value,
+      );
+      final int userMsgCount = verifyMessages
+          .where((m) => m.role == 'user')
+          .length;
+      debugPrint(
+        'Verification: Found ${verifyMessages.length} total messages in database',
+      );
+      debugPrint(
+        'Verification: Found $userMsgCount user messages in database',
+      );
 
-        debugPrint(
-          'Added user message to observable list. Total messages: ${messages.length}',
-        );
+      messages.add(userMessage);
+      hasMessages.value = true;
 
-        // Update conversation title and generate context if it's the first message
-        if (messages.length == 1) {
-          await _updateConversationTitle(messageText);
+      debugPrint(
+        'Added user message to observable list. Total messages: ${messages.length}',
+      );
 
-          // Generate and save context for personalized AI responses
-          await _generateAndSaveContext(messageText);
-        }
+      // Update conversation title and generate context if it's the first message
+      if (messages.length == 1) {
+        await _updateConversationTitle(messageText);
 
-        // Scroll to bottom
-        _scrollToBottom();
+        // Generate and save context for personalized AI responses
+        await _generateAndSaveContext(messageText);
+      }
 
-        // Check for reminder request before sending to AI
-        // Pass document mode context to help differentiate between reminder requests and document editing
+      // Scroll to bottom
+      _scrollToBottom();
+
+      // PRIORITY 2: Check for reminder request (only in regular chat mode, not document mode)
+      // Make sure we're NOT in document mode before checking for reminders
+      // Also check if the message contains document keywords - if so, skip reminder detection
+      final bool hasDocumentKeywords = _hasDocumentKeywords(messageText);
+      if (!isDocumentMode.value && !hasDocumentKeywords) {
         final reminderData = ReminderService.parseReminderFromMessage(
           messageText,
-          isDocumentMode: isDocumentMode.value,
+          isDocumentMode: false, // Explicitly not in document mode
         );
         if (reminderData != null) {
           try {
@@ -261,12 +307,17 @@ class ChatController extends GetxController {
             await _getAIResponse(messageText);
           }
         } else {
+          // No reminder detected - proceed with normal AI response
           // Wait a bit longer to ensure the message is fully saved and indexed in the database
           await Future.delayed(const Duration(milliseconds: 300));
 
           // Get AI response - pass the message text explicitly to ensure it's used
           await _getAIResponse(messageText);
         }
+      } else {
+        // Has document keywords or in document mode - skip reminder detection and get AI response
+        await Future.delayed(const Duration(milliseconds: 300));
+        await _getAIResponse(messageText);
       }
     } catch (e) {
       debugPrint('Error sending message: $e');

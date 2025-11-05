@@ -695,12 +695,12 @@ class _EditProfileViewState extends State<EditProfileView>
                       try {
                         await AuthService.deleteProfilePicture();
                         await AuthService.updateUserProfile(avatarUrl: '');
-                        setState(() {
-                          _selectedImage = null;
-                          _profilePicUrl = '';
+                      setState(() {
+                        _selectedImage = null;
+                        _profilePicUrl = '';
                           _selectedAvatarColor = null;
-                        });
-                        if (mounted) {
+                      });
+                      if (mounted) {
                           scaffoldMessenger.showSnackBar(
                             const SnackBar(
                               content: Text(
@@ -1088,7 +1088,7 @@ class _EditProfileViewState extends State<EditProfileView>
             ),
             const SizedBox(height: 16),
             const Text(
-              'Delete Account',
+          'Delete Account',
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 20,
@@ -1106,63 +1106,63 @@ class _EditProfileViewState extends State<EditProfileView>
                 color: Colors.grey[700],
               ),
               textAlign: TextAlign.center,
-            ),
+        ),
             const SizedBox(height: 20),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Colors.black87),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                     child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins', color: Colors.black87)),
-                  ),
-                ),
+            ),
+          ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () async {
-                      final navigator = Navigator.of(context);
-                      final scaffoldMessenger = ScaffoldMessenger.of(context);
+            onPressed: () async {
+              final navigator = Navigator.of(context);
+              final scaffoldMessenger = ScaffoldMessenger.of(context);
 
-                      navigator.pop();
-                      showDialog(
-                        context: context,
-                        barrierDismissible: false,
+              navigator.pop();
+              showDialog(
+                context: context,
+                barrierDismissible: false,
                         builder: (context) => const Center(child: CircularProgressIndicator()),
-                      );
-                      try {
-                        await AuthService.deleteAccount();
-                        if (mounted) {
+              );
+              try {
+                await AuthService.deleteAccount();
+                if (mounted) {
                           navigator.pop();
-                          widget.onDeleteAccount?.call();
-                        }
-                      } catch (e) {
-                        if (mounted) {
+                  widget.onDeleteAccount?.call();
+                }
+              } catch (e) {
+                if (mounted) {
                           navigator.pop();
-                          scaffoldMessenger.showSnackBar(
-                            SnackBar(
+                  scaffoldMessenger.showSnackBar(
+                    SnackBar(
                               content: Text('Failed to delete account: ${e.toString()}', style: const TextStyle(fontFamily: 'Poppins')),
-                              backgroundColor: Colors.red,
-                              behavior: SnackBarBehavior.floating,
+                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
-                          );
-                        }
-                      }
-                    },
+                    ),
+                  );
+                }
+              }
+            },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                     child: const Text('Delete', style: TextStyle(fontFamily: 'Poppins', color: Colors.white)),
-                  ),
-                ),
-              ],
+            ),
+          ),
+        ],
             ),
           ],
         ),

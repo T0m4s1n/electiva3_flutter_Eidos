@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../services/chat_database.dart';
+import '../services/auth_service.dart';
 
 class AuthController extends GetxController {
   static final SupabaseClient _supabase = Supabase.instance.client;
@@ -64,7 +65,7 @@ class AuthController extends GetxController {
   }
 
   void _listenToAuthChanges() {
-    _supabase.auth.onAuthStateChange.listen((data) {
+    _supabase.auth.onAuthStateChange.listen((data) async {
       final AuthChangeEvent event = data.event;
       final Session? session = data.session;
 
@@ -75,6 +76,19 @@ class AuthController extends GetxController {
             isLoggedIn.value = true;
             userEmail.value = session.user.email ?? '';
             _loadUserProfile();
+            
+            // Sync conversations from Supabase when user signs in (non-blocking)
+            // Schedule sync to happen asynchronously to avoid blocking UI
+            Future.microtask(() async {
+              try {
+                final syncService = AuthService.syncService;
+                await syncService.onLogin(session.user.id);
+                debugPrint('✅ Conversations synced from Supabase after auth state change');
+              } catch (e) {
+                debugPrint('⚠️ Error syncing conversations after auth state change: $e');
+                // Don't fail auth if sync fails
+              }
+            });
           }
           break;
         case AuthChangeEvent.signedOut:
@@ -153,6 +167,23 @@ class AuthController extends GetxController {
         email: email,
         password: password,
       );
+      
+      // If login successful, sync conversations from Supabase in background
+      // Don't block login - sync happens asynchronously
+      if (response.user != null) {
+        // Schedule sync to happen after login completes (non-blocking)
+        Future.microtask(() async {
+          try {
+            final syncService = AuthService.syncService;
+            await syncService.onLogin(response.user!.id);
+            debugPrint('✅ Conversations synced from Supabase after login');
+          } catch (e) {
+            debugPrint('⚠️ Error syncing conversations after login: $e');
+            // Don't fail login if sync fails
+          }
+        });
+      }
+      
       return response;
     } catch (e) {
       rethrow;

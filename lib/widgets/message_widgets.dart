@@ -326,7 +326,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                 )
               else
                 // Regular message display
-                Text(
+                SelectableText(
                   widget.isUser ? _getMessageText() : _displayText,
                   style: TextStyle(
                     fontFamily: 'Poppins',
