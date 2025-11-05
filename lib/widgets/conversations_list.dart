@@ -211,8 +211,25 @@ class _ConversationsListState extends State<ConversationsList>
       await ChatService.deleteConversation(conversationId);
       debugPrint('Successfully deleted conversation from database');
       
-      // Don't reload all conversations - just remove from list (already done in onDismissed)
-      // This avoids expensive database operations that cause frame skips
+      // Ensure the conversation is removed from the observable list if not already removed
+      // This handles cases where deletion happens via popup menu (not swipe)
+      if (mounted && conversations.any((c) => c.id == conversationId)) {
+        conversations.removeWhere((c) => c.id == conversationId);
+        Future.microtask(() {
+          if (mounted) {
+            conversations.refresh();
+          }
+        });
+      }
+      
+      // Reload conversations from database to ensure consistency
+      // Use microtask to defer to avoid blocking UI
+      Future.microtask(() async {
+        if (mounted) {
+          await _loadConversationsFromLocal();
+        }
+      });
+      
       debugPrint('Conversation deleted. Current count: ${conversations.length}');
       
       // If this was the current conversation, clear the controller state and hide chat
