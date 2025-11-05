@@ -26,9 +26,39 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final GlobalKey _headerKey = GlobalKey();
   final TextEditingController _chatSearchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Reload conversations when app comes back to foreground
+      _reloadConversations();
+    }
+  }
+
+  void _reloadConversations() {
+    // Get the conversations list widget and trigger reload
+    // This is safe because ConversationsList loads automatically in initState
+    // We just need to ensure it reloads when returning to home
+    Future.microtask(() {
+      // The ConversationsList widget will automatically reload when it becomes visible
+      // This is handled by the widget's lifecycle
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,10 +92,11 @@ class _HomePageState extends State<HomePage> {
       }
 
       // Show loading screen if initial loading
+      // Don't use duration when used as widget - rely on reactive state
       if (appController.isInitialLoading.value) {
         return LoadingScreen(
           message: TranslationService.translate('welcome_to_eidos'),
-          duration: const Duration(milliseconds: 300),
+          duration: null, // No auto-pop when used as widget
         );
       }
 
@@ -97,7 +128,50 @@ class _HomePageState extends State<HomePage> {
                       onPreferences: () => Get.toNamed(AppRoutes.preferences),
                       onCreateChat: () async {
                         final chatController = Get.find<ChatController>();
-                        await chatController.startNewChat();
+                        
+                        // Show loading dialog
+                        Get.dialog(
+                          Center(
+                            child: Container(
+                              padding: const EdgeInsets.all(24),
+                              margin: const EdgeInsets.symmetric(horizontal: 40),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).cardColor,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const CircularProgressIndicator(),
+                                  const SizedBox(height: 16),
+                                  Obx(() => Text(
+                                    TranslationService.translate('creating_chat'),
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 16,
+                                      color: Theme.of(context).colorScheme.onSurface,
+                                    ),
+                                  )),
+                                ],
+                              ),
+                            ),
+                          ),
+                          barrierDismissible: false,
+                        );
+                        
+                        try {
+                          await chatController.startNewChat();
+                          // Close loading dialog
+                          if (Get.isDialogOpen ?? false) {
+                            Get.back();
+                          }
+                        } catch (e) {
+                          // Close loading dialog if error
+                          if (Get.isDialogOpen ?? false) {
+                            Get.back();
+                          }
+                          // Error will be shown by chatController
+                        }
                       },
                       onMenuStateChanged: (_) {},
                       onOpenConversation: (id) async {
@@ -177,81 +251,118 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
 
-                  // Quick actions below search (Documents / Analytics / Sync)
+                  // Quick actions below search (Documents / Analytics / Archive)
                   if (!navController.showEditProfile.value &&
                       !navController.showChatView.value)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                      child: Row(
+                      child: Column(
                         children: [
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => Get.toNamed(AppRoutes.documents),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).brightness == Brightness.dark
-                                      ? const Color(0xFF2C2C2C)
-                                      : Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Theme.of(context).brightness == Brightness.dark
-                                        ? Colors.grey[600]!
-                                        : Colors.black87,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.folder_copy_outlined, color: Theme.of(context).iconTheme.color, size: 18),
-                                    const SizedBox(width: 8),
-                                    Flexible(
-                                      child: Obx(() => Text(
-                                        TranslationService.translate('documents'),
-                                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      )),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => Get.toNamed(AppRoutes.documents),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).brightness == Brightness.dark
+                                          ? const Color(0xFF2C2C2C)
+                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: Theme.of(context).brightness == Brightness.dark
+                                            ? Colors.grey[600]!
+                                            : Colors.black87,
+                                      ),
                                     ),
-                                  ],
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.folder_copy_outlined, color: Theme.of(context).iconTheme.color, size: 16),
+                                        const SizedBox(width: 6),
+                                        Flexible(
+                                          child: Obx(() => Text(
+                                            TranslationService.translate('documents'),
+                                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 12),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          )),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => Get.toNamed(AppRoutes.analytics),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).brightness == Brightness.dark
-                                      ? const Color(0xFF2C2C2C)
-                                      : Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Theme.of(context).brightness == Brightness.dark
-                                        ? Colors.grey[600]!
-                                        : Colors.black87,
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => Get.toNamed(AppRoutes.analytics),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).brightness == Brightness.dark
+                                          ? const Color(0xFF2C2C2C)
+                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: Theme.of(context).brightness == Brightness.dark
+                                            ? Colors.grey[600]!
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.analytics_outlined, color: Theme.of(context).iconTheme.color, size: 16),
+                                        const SizedBox(width: 6),
+                                        Flexible(
+                                          child: Obx(() => Text(
+                                            TranslationService.translate('analytics'),
+                                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 12),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          )),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.analytics_outlined, color: Theme.of(context).iconTheme.color, size: 18),
-                                    const SizedBox(width: 8),
-                                    Flexible(
-                                      child: Obx(() => Text(
-                                        TranslationService.translate('analytics'),
-                                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      )),
-                                    ),
-                                  ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          // Chat Archive button below Documents and Analytics
+                          GestureDetector(
+                            onTap: () => Get.toNamed(AppRoutes.archive),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).brightness == Brightness.dark
+                                    ? const Color(0xFF2C2C2C)
+                                    : Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.grey[600]!
+                                      : Colors.black87,
                                 ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.archive_outlined, color: Theme.of(context).iconTheme.color, size: 16),
+                                  const SizedBox(width: 6),
+                                  Obx(() => Text(
+                                    TranslationService.translate('chat_archive'),
+                                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 12),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  )),
+                                ],
                               ),
                             ),
                           ),

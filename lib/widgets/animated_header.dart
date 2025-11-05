@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:get/get.dart';
 import '../controllers/theme_controller.dart';
-import '../routes/app_routes.dart';
 import '../services/translation_service.dart';
 
 class AnimatedHeader extends StatefulWidget {
@@ -243,7 +242,14 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
 
                     // New chat button
                     GestureDetector(
-                      onTap: widget.onCreateChat,
+                      onTap: () {
+                        // Close menu if open
+                        if (_isMenuOpen) {
+                          _closeMenu();
+                        }
+                        // Call create chat
+                        widget.onCreateChat?.call();
+                      },
                       child: Container(
                         width: 40,
                         height: 40,
@@ -402,6 +408,7 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                             maxHeight: MediaQuery.of(context).size.height * 0.6,
                           ),
                           child: SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
                             child: Padding(
                               padding: const EdgeInsets.all(20),
                               child: Column(
@@ -567,22 +574,9 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                     isPrimary: true,
                                   ),
 
-                                  const SizedBox(height: 24),
-
-                                  // Tools navigation
-                                  _buildSkeletonButton(
-                                    icon: Icons.archive_outlined,
-                                    textKey: 'chat_archive',
-                                    onTap: () {
-                                      _closeMenu();
-                                      Future.delayed(const Duration(milliseconds: 150), () {
-                                        Get.toNamed(AppRoutes.archive);
-                                      });
-                                    },
-                                  ),
                                   const SizedBox(height: 12),
+                                  // (Chat Archive moved to home page below Documents/Analytics)
                                   // (Documents and Analytics moved near chat list search bar)
-                                  const SizedBox(height: 12),
                                   // (Advanced Settings, Notifications, Feedback moved to Preferences page)
                                 ],
                               ),

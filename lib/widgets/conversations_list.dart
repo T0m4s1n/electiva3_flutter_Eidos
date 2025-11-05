@@ -7,6 +7,7 @@ import '../controllers/auth_controller.dart';
 import '../models/chat_models.dart';
 import '../services/chat_service.dart';
 import '../services/chat_database.dart';
+import '../services/auth_service.dart';
 import 'animated_icon_background.dart';
 import '../services/translation_service.dart';
 
@@ -96,6 +97,51 @@ class _ConversationsListState extends State<ConversationsList>
     try {
       debugPrint('Loading conversations from database...');
       
+      // If user is logged in, sync with Supabase first (non-blocking)
+      if (authController.isLoggedIn.value) {
+        final currentUser = AuthService.currentUser;
+        final userId = currentUser?.id ?? '';
+        if (userId.isNotEmpty) {
+          // Sync with Supabase in background (non-blocking)
+          Future.microtask(() async {
+            try {
+              debugPrint('Syncing with Supabase for user: $userId');
+              await AuthService.manualSync();
+              debugPrint('Sync completed, reloading conversations...');
+              
+              // Reload conversations after sync completes
+              if (mounted) {
+                await _loadConversationsFromLocal();
+              }
+            } catch (e) {
+              debugPrint('Error syncing with Supabase: $e');
+              // Continue to load local conversations even if sync fails
+              if (mounted) {
+                await _loadConversationsFromLocal();
+              }
+            }
+          });
+          
+          // Load local conversations immediately (don't wait for sync)
+          await _loadConversationsFromLocal();
+        } else {
+          // No user ID, just load local conversations
+          await _loadConversationsFromLocal();
+        }
+      } else {
+        // Not logged in, just load local conversations
+        await _loadConversationsFromLocal();
+      }
+    } catch (e) {
+      debugPrint('Error loading conversations: $e');
+      if (mounted) {
+        conversations.clear();
+      }
+    }
+  }
+
+  Future<void> _loadConversationsFromLocal() async {
+    try {
       // Perform database query in a microtask to avoid blocking UI
       final List<ConversationLocal> convs = await Future.microtask(() async {
         return await ChatService.getConversations();
@@ -106,17 +152,17 @@ class _ConversationsListState extends State<ConversationsList>
       // Batch UI updates to avoid excessive rebuilds
       if (mounted) {
         // Clear and add in one operation to minimize rebuilds
-      conversations.clear();
-      conversations.addAll(convs);
+        conversations.clear();
+        conversations.addAll(convs);
         // Only refresh once after all updates
         conversations.refresh();
       }
       
       debugPrint('Updated conversations list. Current count: ${conversations.length}');
     } catch (e) {
-      debugPrint('Error loading conversations: $e');
+      debugPrint('Error loading conversations from local: $e');
       if (mounted) {
-      conversations.clear();
+        conversations.clear();
       }
     }
   }

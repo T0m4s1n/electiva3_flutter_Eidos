@@ -38,11 +38,13 @@ class _LoadingScreenState extends State<LoadingScreen>
     _fadeController.forward();
 
     // Auto-hide after duration if specified
+    // Note: Only pop if we're in a navigator context (as a route/dialog)
+    // If used directly as a widget, rely on parent state management
     if (widget.duration != null) {
       Future.delayed(widget.duration!, () {
         if (mounted) {
           _fadeController.reverse().then((_) {
-            if (mounted) {
+            if (mounted && Navigator.canPop(context)) {
               Navigator.of(context).pop();
             }
           });
