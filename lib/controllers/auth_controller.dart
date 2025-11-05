@@ -366,4 +366,75 @@ class AuthController extends GetxController {
 
   // Listen to auth state changes
   Stream<AuthState> get authStateChanges => _supabase.auth.onAuthStateChange;
+
+  // Sign in with passkey
+  Future<AuthResponse> signInWithPasskey({
+    required String email,
+  }) async {
+    try {
+      isLoading.value = true;
+      final response = await AuthService.signInWithPasskey(email: email);
+      
+      // If login successful, sync conversations from Supabase in background
+      if (response.user != null) {
+        Future.microtask(() async {
+          try {
+            final syncService = AuthService.syncService;
+            await syncService.onLogin(response.user!.id);
+            debugPrint('✅ Conversations synced from Supabase after passkey login');
+          } catch (e) {
+            debugPrint('⚠️ Error syncing conversations after passkey login: $e');
+          }
+        });
+      }
+      
+      return response;
+    } catch (e) {
+      rethrow;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // Register passkey for current user
+  Future<Map<String, dynamic>> registerPasskey({
+    String? deviceName,
+    required String password,
+  }) async {
+    try {
+      isLoading.value = true;
+      return await AuthService.registerPasskey(
+        deviceName: deviceName,
+        password: password,
+      );
+    } catch (e) {
+      rethrow;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // Check if user has passkeys
+  Future<bool> hasPasskeys() async {
+    if (!isLoggedIn.value) return false;
+    return await AuthService.hasPasskeys();
+  }
+
+  // Get user's passkeys
+  Future<List<Map<String, dynamic>>> getUserPasskeys() async {
+    if (!isLoggedIn.value) return [];
+    return await AuthService.getUserPasskeys();
+  }
+
+  // Delete passkey
+  Future<void> deletePasskey(String passkeyId) async {
+    try {
+      isLoading.value = true;
+      await AuthService.deletePasskey(passkeyId);
+    } catch (e) {
+      rethrow;
+    } finally {
+      isLoading.value = false;
+    }
+  }
 }

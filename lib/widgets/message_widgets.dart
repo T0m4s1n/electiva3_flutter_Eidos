@@ -603,34 +603,34 @@ class _ChatInputState extends State<ChatInput> {
               ),
               child: Obx(
                 () => TextField(
-                  controller: widget.controller,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 16,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                  decoration: InputDecoration(
+                controller: widget.controller,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                decoration: InputDecoration(
                     hintText: TranslationService.translate('type_a_message'),
-                    hintStyle: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: isDark ? Colors.grey[500] : Colors.grey[500],
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
+                  hintStyle: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: isDark ? Colors.grey[500] : Colors.grey[500],
                   ),
-                  maxLines: null,
-                  textInputAction: TextInputAction.newline,
-                  onChanged: (value) {
-                    // Handle text changes if needed
-                  },
-                  onSubmitted: (value) {
-                    if (value.trim().isNotEmpty && !widget.isLoading) {
-                      widget.onSend?.call();
-                    }
-                  },
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+                maxLines: null,
+                textInputAction: TextInputAction.newline,
+                onChanged: (value) {
+                  // Handle text changes if needed
+                },
+                onSubmitted: (value) {
+                  if (value.trim().isNotEmpty && !widget.isLoading) {
+                    widget.onSend?.call();
+                  }
+                },
                 ),
               ),
             ),

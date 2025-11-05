@@ -416,13 +416,13 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                       Obx(
                                         () => Text(
                                           TranslationService.translate('account'),
-                                          style: TextStyle(
-                                            fontFamily: 'Poppins',
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.onSurface,
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurface,
                                           ),
                                         ),
                                       ),
@@ -458,16 +458,16 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                                             children: [
                                               Obx(
                                                 () => Text(
-                                                  widget.userName.isNotEmpty
-                                                      ? widget.userName
+                                                widget.userName.isNotEmpty
+                                                    ? widget.userName
                                                       : TranslationService.translate('user'),
-                                                  style: TextStyle(
-                                                    fontFamily: 'Poppins',
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: Theme.of(
-                                                      context,
-                                                    ).colorScheme.onSurface,
+                                                style: TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).colorScheme.onSurface,
                                                   ),
                                                   maxLines: 1,
                                                   overflow: TextOverflow.ellipsis,
@@ -656,13 +656,13 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                       : buttonText;
                   return Text(
                     translatedText,
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: isPrimary
-                          ? (isDark ? Colors.black87 : Colors.white)
-                          : (isDark ? Colors.white : Colors.black87),
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: isPrimary
+                    ? (isDark ? Colors.black87 : Colors.white)
+                    : (isDark ? Colors.white : Colors.black87),
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

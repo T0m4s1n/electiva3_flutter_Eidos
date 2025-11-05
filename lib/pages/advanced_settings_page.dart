@@ -70,7 +70,7 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
       
       // Calculate database size
       final db = await ChatDatabase.instance;
-      final dbPath = await db.path;
+      final dbPath = db.path;
       final dbFile = File(dbPath);
       if (await dbFile.exists()) {
         final dbSize = await dbFile.length();
@@ -523,7 +523,7 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
                 Switch(
                   value: _applyToAllChats,
                   onChanged: (v) => setState(() => _applyToAllChats = v),
-                  activeColor: Theme.of(context).colorScheme.primary,
+                  activeThumbColor: Theme.of(context).colorScheme.primary,
                 ),
               ],
             ),
@@ -698,7 +698,7 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: Theme.of(context).colorScheme.primary,
+            activeThumbColor: Theme.of(context).colorScheme.primary,
           ),
         ],
       ),

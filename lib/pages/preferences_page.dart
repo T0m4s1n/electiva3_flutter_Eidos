@@ -8,7 +8,9 @@ import '../routes/app_routes.dart';
 import '../widgets/animated_icon_background.dart';
 import '../services/translation_service.dart';
 import '../services/auth_service.dart';
+import '../services/passkey_service.dart';
 import '../widgets/theme_change_loader.dart';
+import '../controllers/auth_controller.dart';
 
 class PreferencesPage extends StatelessWidget {
   const PreferencesPage({super.key});
@@ -200,6 +202,8 @@ class PreferencesPage extends StatelessWidget {
           ),
           const Divider(height: 24),
           _buildSyncButton(context),
+          const Divider(height: 24),
+          _buildPasskeySection(context),
         ],
       ),
     );
@@ -363,6 +367,378 @@ class PreferencesPage extends StatelessWidget {
         ),
       );
     });
+  }
+
+  Widget _buildPasskeySection(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final AuthController authController = Get.find<AuthController>();
+    final RxBool hasPasskeys = false.obs;
+    final RxBool isLoading = false.obs;
+    
+    // Check if user has passkeys
+    Future.microtask(() async {
+      if (AuthService.isLoggedIn) {
+        hasPasskeys.value = await PasskeyService.hasPasskeys(AuthService.currentUser!.id);
+      }
+    });
+    
+    return Obx(() {
+      if (!AuthService.isLoggedIn) {
+        return const SizedBox.shrink();
+      }
+      
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.fingerprint,
+                color: isDark ? Colors.blue[300] : Colors.blue[600],
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Passkey Authentication',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            hasPasskeys.value
+                ? 'You have a passkey registered. You can sign in with biometrics.'
+                : 'Register a passkey to sign in securely with your fingerprint or face.',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 14,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (hasPasskeys.value)
+            GestureDetector(
+              onTap: isLoading.value ? null : () async {
+                // Show dialog to manage passkeys
+                _showPasskeyManagementDialog(context);
+              },
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey[800] : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isDark ? Colors.grey[600]! : Colors.black87,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.manage_accounts,
+                      color: isDark ? Colors.blue[300] : Colors.blue[600],
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Manage Passkeys',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            GestureDetector(
+              onTap: isLoading.value ? null : () async {
+                isLoading.value = true;
+                try {
+                  // Check if device supports biometrics
+                  final isSupported = await PasskeyService.isDeviceSupported();
+                  if (!isSupported) {
+                    Get.snackbar(
+                      'Not Supported',
+                      'Your device does not support biometric authentication.',
+                      snackPosition: SnackPosition.BOTTOM,
+                      backgroundColor: Colors.red[100],
+                      colorText: Colors.red[800],
+                    );
+                    return;
+                  }
+                  
+                  // Show dialog to enter password for passkey registration
+                  _showRegisterPasskeyDialog(context, authController);
+                } catch (e) {
+                  Get.snackbar(
+                    'Error',
+                    'Failed to check device support: ${e.toString()}',
+                    snackPosition: SnackPosition.BOTTOM,
+                    backgroundColor: Colors.red[100],
+                    colorText: Colors.red[800],
+                  );
+                } finally {
+                  isLoading.value = false;
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF2C2C2C) : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isDark ? Colors.grey[600]! : Colors.black87,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.add_circle_outline,
+                      color: isDark ? Colors.blue[300] : Colors.blue[600],
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Register Passkey',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      );
+    });
+  }
+
+  void _showRegisterPasskeyDialog(BuildContext context, AuthController authController) {
+    final passwordController = TextEditingController();
+    
+    Get.dialog(
+      Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Register Passkey',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Enter your password to register a passkey. This will allow you to sign in with biometrics.',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  hintText: 'Enter your password',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Get.back(),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: () async {
+                      if (passwordController.text.isEmpty) {
+                        Get.snackbar(
+                          'Error',
+                          'Please enter your password',
+                          snackPosition: SnackPosition.BOTTOM,
+                          backgroundColor: Colors.red[100],
+                          colorText: Colors.red[800],
+                        );
+                        return;
+                      }
+                      
+                      Get.back();
+                      
+                      try {
+                        await authController.registerPasskey(
+                          password: passwordController.text,
+                        );
+                        
+                        Get.snackbar(
+                          'Success',
+                          'Passkey registered successfully!',
+                          snackPosition: SnackPosition.BOTTOM,
+                          backgroundColor: Colors.green[100],
+                          colorText: Colors.green[800],
+                        );
+                      } catch (e) {
+                        Get.snackbar(
+                          'Error',
+                          'Failed to register passkey: ${e.toString()}',
+                          snackPosition: SnackPosition.BOTTOM,
+                          backgroundColor: Colors.red[100],
+                          colorText: Colors.red[800],
+                        );
+                      }
+                    },
+                    child: const Text('Register'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showPasskeyManagementDialog(BuildContext context) {
+    final AuthController authController = Get.find<AuthController>();
+    
+    Get.dialog(
+      Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: FutureBuilder<List<Map<String, dynamic>>>(
+          future: authController.getUserPasskeys(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Container(
+                padding: const EdgeInsets.all(24),
+                child: const CircularProgressIndicator(),
+              );
+            }
+            
+            final passkeys = snapshot.data ?? [];
+            
+            return Container(
+              padding: const EdgeInsets.all(24),
+              constraints: const BoxConstraints(maxHeight: 400),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Manage Passkeys',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (passkeys.isEmpty)
+                    Text(
+                      'No passkeys registered',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: passkeys.length,
+                        itemBuilder: (context, index) {
+                          final passkey = passkeys[index];
+                          return ListTile(
+                            leading: const Icon(Icons.fingerprint),
+                            title: Text(
+                              passkey['device_name'] ?? 'Unknown Device',
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            subtitle: Text(
+                              passkey['device_type'] ?? 'Unknown',
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 12,
+                              ),
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: () async {
+                                try {
+                                  await authController.deletePasskey(
+                                    passkey['passkey_id'] as String,
+                                  );
+                                  Get.back();
+                                  Get.snackbar(
+                                    'Success',
+                                    'Passkey deleted successfully',
+                                    snackPosition: SnackPosition.BOTTOM,
+                                    backgroundColor: Colors.green[100],
+                                    colorText: Colors.green[800],
+                                  );
+                                } catch (e) {
+                                  Get.snackbar(
+                                    'Error',
+                                    'Failed to delete passkey: ${e.toString()}',
+                                    snackPosition: SnackPosition.BOTTOM,
+                                    backgroundColor: Colors.red[100],
+                                    colorText: Colors.red[800],
+                                  );
+                                }
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: () => Get.back(),
+                    child: const Text('Close'),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   Widget _buildNavTile(
@@ -535,7 +911,7 @@ class PreferencesPage extends StatelessWidget {
                     themeController.setThemeMode(value);
                     preferencesController.setThemeMode(value);
                   },
-                  activeColor: Theme.of(context).colorScheme.primary,
+                  activeThumbColor: Theme.of(context).colorScheme.primary,
                 ),
               ],
             ),
@@ -605,7 +981,7 @@ class PreferencesPage extends StatelessWidget {
           const SizedBox(height: 16),
           Obx(
             () => DropdownButtonFormField<AppLanguage>(
-              value: TranslationService.currentLanguageObs.value,
+              initialValue: TranslationService.currentLanguageObs.value,
               decoration: InputDecoration(
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -719,7 +1095,7 @@ class PreferencesPage extends StatelessWidget {
           const SizedBox(height: 16),
           Obx(
             () => DropdownButtonFormField<String>(
-              value: preferencesController.model.value,
+              initialValue: preferencesController.model.value,
               decoration: InputDecoration(
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -903,7 +1279,7 @@ class PreferencesPage extends StatelessWidget {
           const SizedBox(height: 16),
           Obx(
             () => DropdownButtonFormField<AIPersonality>(
-              value: preferencesController.aiPersonality.value,
+              initialValue: preferencesController.aiPersonality.value,
               decoration: InputDecoration(
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),

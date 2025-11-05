@@ -266,7 +266,7 @@ class IdGenerator {
     final DateTime now = DateTime.now();
     final String timestamp = now.millisecondsSinceEpoch.toString();
     final String random = now.microsecond.toString().padLeft(6, '0');
-    return '${timestamp}_${random}';
+    return '${timestamp}_$random';
   }
 }
 

@@ -98,25 +98,25 @@ class SyncService {
       const int batchSize = 50;
       for (int i = 0; i < convs.length; i += batchSize) {
         final end = (i + batchSize).clamp(0, convs.length);
-        final List<Map<String, dynamic>> payload = convs
+      final List<Map<String, dynamic>> payload = convs
             .sublist(i, end)
-            .map(
-              (Map<String, Object?> c) => {
-                'id': c['id'],
-                'user_id': c['user_id'],
-                'title': c['title'],
-                'model': c['model'],
-                'summary': c['summary'],
-                'context': c['context'],
-                'is_archived': (c['is_archived'] as int? ?? 0) == 1,
-                'last_message_at': c['last_message_at'],
-                'created_at': c['created_at'],
-                'updated_at': c['updated_at'],
-              },
-            )
-            .toList();
+          .map(
+            (Map<String, Object?> c) => {
+              'id': c['id'],
+              'user_id': c['user_id'],
+              'title': c['title'],
+              'model': c['model'],
+              'summary': c['summary'],
+              'context': c['context'],
+              'is_archived': (c['is_archived'] as int? ?? 0) == 1,
+              'last_message_at': c['last_message_at'],
+              'created_at': c['created_at'],
+              'updated_at': c['updated_at'],
+            },
+          )
+          .toList();
 
-        await supabase.from('conversations').upsert(payload, onConflict: 'id');
+      await supabase.from('conversations').upsert(payload, onConflict: 'id');
         // Yield to UI thread between batches
         await Future.delayed(const Duration(milliseconds: 10));
       }
@@ -172,11 +172,11 @@ class SyncService {
         const int syncBatchSize = 100;
         for (int i = 0; i < msgs.length; i += syncBatchSize) {
           final end = (i + syncBatchSize).clamp(0, msgs.length);
-          final List<String> ids = msgs
+        final List<String> ids = msgs
               .sublist(i, end)
-              .map((Map<String, Object?> m) => m['id'] as String)
-              .toList();
-          await ChatDatabase.markMessagesSynced(ids);
+            .map((Map<String, Object?> m) => m['id'] as String)
+            .toList();
+        await ChatDatabase.markMessagesSynced(ids);
           // Yield to UI thread between batches
           await Future.delayed(const Duration(milliseconds: 10));
         }
@@ -208,20 +208,20 @@ class SyncService {
         final end = (i + batchSize).clamp(0, convs.length);
         for (int j = i; j < end; j++) {
           final c = convs[j];
-          batch.insert('conversations', {
-            'id': c['id'],
-            'user_id': c['user_id'],
-            'title': c['title'],
-            'model': c['model'],
-            'summary': c['summary'],
-            'context': c['context'],
-            'is_archived': (c['is_archived'] == true) ? 1 : 0,
-            'last_message_at': c['last_message_at'],
-            'created_at': c['created_at'],
-            'updated_at': c['updated_at'],
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
-        }
-        await batch.commit(noResult: true);
+        batch.insert('conversations', {
+          'id': c['id'],
+          'user_id': c['user_id'],
+          'title': c['title'],
+          'model': c['model'],
+          'summary': c['summary'],
+          'context': c['context'],
+          'is_archived': (c['is_archived'] == true) ? 1 : 0,
+          'last_message_at': c['last_message_at'],
+          'created_at': c['created_at'],
+          'updated_at': c['updated_at'],
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+      await batch.commit(noResult: true);
         // Yield to UI thread between batches
         await Future.delayed(const Duration(milliseconds: 10));
       }
@@ -236,13 +236,13 @@ class SyncService {
       for (int i = 0; i < convIds.length; i += messageBatchSize) {
         final end = (i + messageBatchSize).clamp(0, convIds.length);
         final batchIds = convIds.sublist(i, end);
-        
-        final List<Map<String, dynamic>> msgs = await supabase
-            .from('messages')
-            .select()
+
+    final List<Map<String, dynamic>> msgs = await supabase
+        .from('messages')
+        .select()
             .inFilter('conversation_id', batchIds);
             
-        if (msgs.isNotEmpty) {
+    if (msgs.isNotEmpty) {
           // Process messages in smaller batches
           const int insertBatchSize = 50;
           for (int j = 0; j < msgs.length; j += insertBatchSize) {
@@ -250,19 +250,19 @@ class SyncService {
             final endMsg = (j + insertBatchSize).clamp(0, msgs.length);
             for (int k = j; k < endMsg; k++) {
               final m = msgs[k];
-              batch.insert('messages', {
-                'id': m['id'],
-                'conversation_id': m['conversation_id'],
-                'role': m['role'],
-                'content': jsonEncode(m['content']),
-                'created_at': m['created_at'],
-                'seq': m['seq'],
-                'parent_id': m['parent_id'],
-                'status': m['status'] ?? 'ok',
-                'is_deleted': (m['is_deleted'] == true) ? 1 : 0,
-              }, conflictAlgorithm: ConflictAlgorithm.replace);
-            }
-            await batch.commit(noResult: true);
+        batch.insert('messages', {
+          'id': m['id'],
+          'conversation_id': m['conversation_id'],
+          'role': m['role'],
+          'content': jsonEncode(m['content']),
+          'created_at': m['created_at'],
+          'seq': m['seq'],
+          'parent_id': m['parent_id'],
+          'status': m['status'] ?? 'ok',
+          'is_deleted': (m['is_deleted'] == true) ? 1 : 0,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+      await batch.commit(noResult: true);
             // Yield to UI thread between batches
             await Future.delayed(const Duration(milliseconds: 10));
           }

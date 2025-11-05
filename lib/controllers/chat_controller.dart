@@ -36,11 +36,6 @@ class ChatController extends GetxController {
   // OpenAI API key
   String? get openaiKey => dotenv.env['OPENAI_KEY'];
 
-  @override
-  void onInit() {
-    super.onInit();
-    // Don't initialize chat automatically - let it be done manually when needed
-  }
 
   @override
   void onClose() {
@@ -376,7 +371,7 @@ class ChatController extends GetxController {
             'role': msg['role'] as String,
             'content': _cleanMessageContent(textContent),
           };
-        }).toList(),
+        }),
         {
           'role': 'user',
           'content': _cleanMessageContent(userMessage),
@@ -1394,7 +1389,7 @@ Make it comprehensive and ready to use with proper markdown formatting.''',
           'Message $i: role=${msg.role}, seq=${msg.seq}, id=${msg.id}',
         );
         debugPrint(
-          '  Content preview: ${text.length > 50 ? text.substring(0, 50) + "..." : text}',
+          '  Content preview: ${text.length > 50 ? "${text.substring(0, 50)}..." : text}',
         );
       }
 

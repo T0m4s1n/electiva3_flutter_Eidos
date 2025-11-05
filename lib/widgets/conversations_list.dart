@@ -63,11 +63,11 @@ class _ConversationsListState extends State<ConversationsList>
       // Initialize the database first (non-blocking)
       // Use Future.microtask to defer heavy operations
       await Future.microtask(() async {
-        await ChatDatabase.instance;
-        debugPrint('Database initialized successfully');
-        
+      await ChatDatabase.instance;
+      debugPrint('Database initialized successfully');
+      
         // Load conversations after database is ready
-        await _loadConversations();
+      await _loadConversations();
       });
     } catch (e) {
       debugPrint('Error initializing database: $e');
@@ -106,8 +106,8 @@ class _ConversationsListState extends State<ConversationsList>
       // Batch UI updates to avoid excessive rebuilds
       if (mounted) {
         // Clear and add in one operation to minimize rebuilds
-        conversations.clear();
-        conversations.addAll(convs);
+      conversations.clear();
+      conversations.addAll(convs);
         // Only refresh once after all updates
         conversations.refresh();
       }
@@ -116,7 +116,7 @@ class _ConversationsListState extends State<ConversationsList>
     } catch (e) {
       debugPrint('Error loading conversations: $e');
       if (mounted) {
-        conversations.clear();
+      conversations.clear();
       }
     }
   }
@@ -175,14 +175,14 @@ class _ConversationsListState extends State<ConversationsList>
         // Use microtask to defer UI updates
         Future.microtask(() {
           if (mounted) {
-            chatController.messages.clear();
-            chatController.currentConversationId.value = '';
-            chatController.conversationTitle.value = 'New Chat';
-            chatController.hasMessages.value = false;
-            
-            // Hide chat view to show the conversations list
-            navController.hideChat();
-            debugPrint('Cleared current conversation state and hid chat');
+        chatController.messages.clear();
+        chatController.currentConversationId.value = '';
+        chatController.conversationTitle.value = 'New Chat';
+        chatController.hasMessages.value = false;
+        
+        // Hide chat view to show the conversations list
+        navController.hideChat();
+        debugPrint('Cleared current conversation state and hid chat');
           }
         });
       }
@@ -207,14 +207,14 @@ class _ConversationsListState extends State<ConversationsList>
       // Show error to user (non-blocking)
       Future.microtask(() {
         if (mounted) {
-          Get.snackbar(
+      Get.snackbar(
             TranslationService.translate('error'),
             TranslationService.translate('failed_to_delete_conversation'),
-            snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: Colors.red[100],
-            colorText: Colors.red[800],
-          );
-        }
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red[100],
+        colorText: Colors.red[800],
+      );
+    }
       });
     }
   }
@@ -228,8 +228,8 @@ class _ConversationsListState extends State<ConversationsList>
       }
     } catch (e) {
       debugPrint('Error archiving conversation: $e');
+      }
     }
-  }
 
 
   @override
@@ -262,16 +262,16 @@ class _ConversationsListState extends State<ConversationsList>
               },
               child: ListView.builder(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
                 itemCount: visibleConversations.length,
                 // Add cacheExtent to improve performance
                 cacheExtent: 500,
                 // Use key to help Flutter optimize rebuilds
-                itemBuilder: (context, index) {
+              itemBuilder: (context, index) {
                   final conversation = visibleConversations[index];
-                  return _buildConversationCard(conversation);
-                },
-              ),
+                return _buildConversationCard(conversation);
+              },
+            ),
             ),
           
         ],
@@ -306,10 +306,10 @@ class _ConversationsListState extends State<ConversationsList>
           Obx(
             () => Text(
               TranslationService.translate('no_conversations_yet'),
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 18,
-                color: isDark ? Colors.grey[400] : Colors.grey[600],
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 18,
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
               ),
             ),
           ),
@@ -317,10 +317,10 @@ class _ConversationsListState extends State<ConversationsList>
           Obx(
             () => Text(
               TranslationService.translate('start_chat_prompt'),
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 14,
-                color: isDark ? Colors.grey[500] : Colors.grey[500],
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 14,
+              color: isDark ? Colors.grey[500] : Colors.grey[500],
               ),
             ),
           ),
@@ -339,14 +339,14 @@ class _ConversationsListState extends State<ConversationsList>
               child:                   Obx(
                     () => Text(
                       TranslationService.translate('start_new_chat'),
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.black87 : Colors.white,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.black87 : Colors.white,
                       ),
-                    ),
-                  ),
+                ),
+              ),
             ),
           ),
         ],
@@ -401,21 +401,21 @@ class _ConversationsListState extends State<ConversationsList>
           });
         },
         child: Container(
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isDark ? Colors.grey[600]! : Colors.black87,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark ? Colors.grey[600]! : Colors.black87,
               ),
-            ],
-          ),
-          child: ListTile(
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: ListTile(
               contentPadding: const EdgeInsets.all(16),
               title: Text(
                 conversation.title ?? 'Untitled Chat',
@@ -456,11 +456,11 @@ class _ConversationsListState extends State<ConversationsList>
                           const SizedBox(width: 6),
                           Flexible(
                             child: Text(
-                              conversation.model!,
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                                color: Theme.of(context).colorScheme.onSurface,
+                            conversation.model!,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              color: Theme.of(context).colorScheme.onSurface,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -540,11 +540,11 @@ class _ConversationsListState extends State<ConversationsList>
                 ),
               ),
               onTap: () => _openConversation(conversation.id),
-            ),
           ),
         ),
-      );
-    }
+      ),
+    );
+  }
 
   String _formatDate(String isoString) {
     try {

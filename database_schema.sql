@@ -520,6 +520,34 @@ CREATE INDEX IF NOT EXISTS idx_feedback_messages_type
 CREATE INDEX IF NOT EXISTS idx_feedback_messages_created
   ON public.feedback_messages(created_at DESC);
 
+-- Passkeys table
+-- Stores passkey credentials for biometric authentication
+CREATE TABLE IF NOT EXISTS public.passkeys (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  passkey_id TEXT NOT NULL UNIQUE,
+  credential_id TEXT NOT NULL UNIQUE,
+  public_key TEXT NOT NULL,
+  device_name TEXT,
+  device_type TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- Index for passkeys by user
+CREATE INDEX IF NOT EXISTS idx_passkeys_user
+  ON public.passkeys(user_id);
+
+-- Index for passkeys by credential_id for fast lookup
+CREATE INDEX IF NOT EXISTS idx_passkeys_credential_id
+  ON public.passkeys(credential_id);
+
+-- Index for active passkeys by user
+CREATE INDEX IF NOT EXISTS idx_passkeys_user_active
+  ON public.passkeys(user_id, is_active)
+  WHERE is_active = TRUE;
+
 -- ============ ADDITIONAL TRIGGERS ============
 
 -- Function to update updated_at timestamp
@@ -590,6 +618,7 @@ ALTER TABLE public.crash_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reminders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notification_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.feedback_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.passkeys ENABLE ROW LEVEL SECURITY;
 
 -- ============ POLICIES FOR ADVANCED SETTINGS ============
 
@@ -725,6 +754,33 @@ DROP POLICY IF EXISTS "feedback_messages_delete_own" ON public.feedback_messages
 CREATE POLICY "feedback_messages_delete_own"
   ON public.feedback_messages FOR DELETE
   USING (auth.uid() = user_id OR user_id IS NULL);
+
+-- ============ POLICIES FOR PASSKEYS ============
+
+-- Allow users to select their own passkeys
+DROP POLICY IF EXISTS "passkeys_select_own" ON public.passkeys;
+CREATE POLICY "passkeys_select_own"
+  ON public.passkeys FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Allow users to insert their own passkeys
+DROP POLICY IF EXISTS "passkeys_insert_own" ON public.passkeys;
+CREATE POLICY "passkeys_insert_own"
+  ON public.passkeys FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- Allow users to update their own passkeys
+DROP POLICY IF EXISTS "passkeys_update_own" ON public.passkeys;
+CREATE POLICY "passkeys_update_own"
+  ON public.passkeys FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- Allow users to delete their own passkeys
+DROP POLICY IF EXISTS "passkeys_delete_own" ON public.passkeys;
+CREATE POLICY "passkeys_delete_own"
+  ON public.passkeys FOR DELETE
+  USING (auth.uid() = user_id);
 
 -- ============ MIGRATION: ADD AUTO_SYNC COLUMN (if needed) ============
 -- Only run this if the advanced_settings table exists without the auto_sync column

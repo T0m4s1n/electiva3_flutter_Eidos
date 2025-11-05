@@ -5,6 +5,8 @@ import '../services/auth_service.dart';
 import 'animated_icon_background.dart';
 import 'dart:ui' as ui;
 import 'package:lottie/lottie.dart';
+import 'package:get/get.dart';
+import '../controllers/auth_controller.dart';
 
 class EditProfileView extends StatefulWidget {
   final String currentName;
@@ -47,6 +49,11 @@ class _EditProfileViewState extends State<EditProfileView>
   bool _isChangingPassword = false;
   bool _isNewPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
+  bool _isNavigatingBack = false;
+  bool _hasPasskeys = false;
+  List<Map<String, dynamic>> _userPasskeys = [];
+  bool _loadingPasskeys = false;
+  final _passkeyPasswordController = TextEditingController();
 
   @override
   void initState() {
@@ -81,6 +88,9 @@ class _EditProfileViewState extends State<EditProfileView>
 
     // Load current avatar url so the real profile picture shows up
     _loadCurrentAvatar();
+    
+    // Load passkeys
+    _loadPasskeys();
   }
 
   Future<void> _loadCurrentAvatar() async {
@@ -94,15 +104,394 @@ class _EditProfileViewState extends State<EditProfileView>
     } catch (_) {}
   }
 
+  Future<void> _loadPasskeys() async {
+    if (!mounted) return;
+    setState(() {
+      _loadingPasskeys = true;
+    });
+    
+    try {
+      final authController = Get.find<AuthController>();
+      final hasPasskeys = await authController.hasPasskeys();
+      final passkeys = await authController.getUserPasskeys();
+      
+      if (mounted) {
+        setState(() {
+          _hasPasskeys = hasPasskeys;
+          _userPasskeys = passkeys;
+          _loadingPasskeys = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading passkeys: $e');
+      if (mounted) {
+        setState(() {
+          _hasPasskeys = false;
+          _userPasskeys = [];
+          _loadingPasskeys = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _registerPasskey() async {
+    // Show dialog to enter password for passkey registration
+    final password = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Register Passkey',
+          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Enter your password to register a passkey. You will use biometric authentication to sign in.',
+              style: TextStyle(fontFamily: 'Poppins'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _passkeyPasswordController,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _passkeyPasswordController.clear();
+              Navigator.pop(context);
+            },
+            child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins')),
+          ),
+          TextButton(
+            onPressed: () {
+              if (_passkeyPasswordController.text.isNotEmpty) {
+                Navigator.pop(context, _passkeyPasswordController.text);
+              }
+            },
+            child: const Text('Register', style: TextStyle(fontFamily: 'Poppins')),
+          ),
+        ],
+      ),
+    );
+
+    if (password == null || password.isEmpty) {
+      _passkeyPasswordController.clear();
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final authController = Get.find<AuthController>();
+      await authController.registerPasskey(
+        password: password,
+        deviceName: 'This Device',
+      );
+
+      _passkeyPasswordController.clear();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Passkey registered successfully!',
+              style: TextStyle(fontFamily: 'Poppins'),
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+        await _loadPasskeys();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to register passkey: ${e.toString()}',
+              style: const TextStyle(fontFamily: 'Poppins'),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _deletePasskey(String passkeyId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Delete Passkey',
+          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Are you sure you want to delete this passkey?',
+          style: TextStyle(fontFamily: 'Poppins'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(fontFamily: 'Poppins', color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final authController = Get.find<AuthController>();
+      await authController.deletePasskey(passkeyId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Passkey deleted successfully!',
+              style: TextStyle(fontFamily: 'Poppins'),
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+        await _loadPasskeys();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to delete passkey: ${e.toString()}',
+              style: const TextStyle(fontFamily: 'Poppins'),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildPasskeySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Passkey Management',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.black87),
+          ),
+          child: _loadingPasskeys
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              : _hasPasskeys
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Registered Passkeys:',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        ..._userPasskeys.map((passkey) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.fingerprint, size: 20, color: Colors.black87),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        passkey['device_name'] ?? 'Unknown Device',
+                                        style: const TextStyle(
+                                          fontFamily: 'Poppins',
+                                          fontSize: 14,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, size: 20, color: Colors.red),
+                                    onPressed: () => _deletePasskey(passkey['passkey_id'] as String),
+                                  ),
+                                ],
+                              ),
+                            )),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _isLoading ? null : _registerPasskey,
+                            icon: const Icon(Icons.fingerprint, size: 18),
+                            label: const Text(
+                              'Add New Passkey',
+                              style: TextStyle(fontFamily: 'Poppins'),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        const Text(
+                          'No passkeys registered. Register a passkey to sign in with biometric authentication.',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 14,
+                            color: Colors.black87,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _isLoading ? null : _registerPasskey,
+                            icon: const Icon(Icons.fingerprint, size: 18),
+                            label: const Text(
+                              'Register Passkey',
+                              style: TextStyle(fontFamily: 'Poppins'),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+        ),
+      ],
+    );
+  }
+
   @override
   void dispose() {
-    _fadeController.dispose();
-    _slideController.dispose();
+    // Stop animations before disposing to prevent crashes
+    try {
+      if (_fadeController.isAnimating) {
+        _fadeController.stop();
+      }
+    } catch (e) {
+      // Ignore errors when stopping
+    }
+    try {
+      if (_slideController.isAnimating) {
+        _slideController.stop();
+      }
+    } catch (e) {
+      // Ignore errors when stopping
+    }
+    try {
+      _fadeController.dispose();
+    } catch (e) {
+      // Ignore errors if already disposed
+    }
+    try {
+      _slideController.dispose();
+    } catch (e) {
+      // Ignore errors if already disposed
+    }
     _nameController.dispose();
     _emailController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
+    _passkeyPasswordController.dispose();
     super.dispose();
+  }
+
+  void _handleBack() {
+    // Prevent multiple calls
+    if (_isNavigatingBack || !mounted) return;
+    
+    _isNavigatingBack = true;
+    
+    // Stop animations immediately to prevent crashes
+    try {
+      if (_fadeController.isAnimating) {
+        _fadeController.stop();
+      }
+    } catch (e) {
+      // Ignore errors when stopping
+    }
+    try {
+      if (_slideController.isAnimating) {
+        _slideController.stop();
+      }
+    } catch (e) {
+      // Ignore errors when stopping
+    }
+    
+    // Navigate back immediately using microtask to avoid build issues
+    Future.microtask(() {
+      if (mounted && widget.onBack != null) {
+        widget.onBack!();
+      }
+    });
   }
 
   @override
@@ -133,7 +522,7 @@ class _EditProfileViewState extends State<EditProfileView>
                       Row(
                         children: [
                           GestureDetector(
-                            onTap: widget.onBack,
+                            onTap: _handleBack,
                             child: Container(
                               width: 40,
                               height: 40,
@@ -448,6 +837,11 @@ class _EditProfileViewState extends State<EditProfileView>
                                           ],
                                         ),
                                 ),
+
+                                const SizedBox(height: 20),
+
+                                // Passkey Management Section
+                                _buildPasskeySection(),
 
                                 const SizedBox(height: 20),
 

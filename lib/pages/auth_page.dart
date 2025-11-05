@@ -4,6 +4,8 @@ import 'package:lottie/lottie.dart';
 import '../controllers/auth_controller.dart';
 import '../controllers/navigation_controller.dart';
 import '../widgets/animated_icon_background.dart';
+import '../services/translation_service.dart';
+import '../services/passkey_service.dart' as passkey;
 
 class AuthPage extends StatelessWidget {
   const AuthPage({super.key});
@@ -67,6 +69,10 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
   bool _showSuccessAnimation = false;
+  bool _emailValidated = false;
+  bool _hasPasskey = false;
+  bool _checkingPasskey = false;
+  String? _selectedLoginMethod; // 'password' or 'passkey'
 
   @override
   void initState() {
@@ -164,18 +170,20 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                           child: child,
                                         );
                                       },
-                                  child: Text(
-                                    widget.isLogin
-                                        ? 'Log In'
-                                        : 'Create Account',
-                                    key: ValueKey(widget.isLogin),
-                                    style: const TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
+                                  child: Obx(
+                                    () => Text(
+                                      widget.isLogin
+                                          ? TranslationService.translate('login')
+                                          : TranslationService.translate('register'),
+                                      key: ValueKey(widget.isLogin),
+                                      style: const TextStyle(
+                                        fontFamily: 'Poppins',
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                      ),
+                                      textAlign: TextAlign.center,
                                     ),
-                                    textAlign: TextAlign.center,
                                   ),
                                 ),
 
@@ -234,17 +242,17 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                               key: ValueKey(
                                                 'welcome_${widget.isLogin}',
                                               ),
-                                              child: Text(
-                                                widget.isLogin
-                                                    ? 'Welcome back!'
-                                                    : 'Join Eidos today',
-                                                style: const TextStyle(
-                                                  fontFamily: 'Poppins',
-                                                  fontSize: 20,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Colors.black87,
+                                              child: Obx(
+                                                () => Text(
+                                                  TranslationService.translate('welcome_to_eidos'),
+                                                  style: const TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontSize: 20,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Colors.black87,
+                                                  ),
+                                                  textAlign: TextAlign.center,
                                                 ),
-                                                textAlign: TextAlign.center,
                                               ),
                                             ),
                                           ),
@@ -278,16 +286,18 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                               key: ValueKey(
                                                 'subtitle_${widget.isLogin}',
                                               ),
-                                              child: Text(
-                                                widget.isLogin
-                                                    ? 'Sign in to continue your journey'
-                                                    : 'Create your account to get started',
-                                                style: TextStyle(
-                                                  fontFamily: 'Poppins',
-                                                  fontSize: 14,
-                                                  color: Colors.grey[600],
+                                              child: Obx(
+                                                () => Text(
+                                                  widget.isLogin
+                                                      ? TranslationService.translate('sign_in')
+                                                      : TranslationService.translate('sign_up'),
+                                                  style: TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontSize: 14,
+                                                    color: Colors.grey[600],
+                                                  ),
+                                                  textAlign: TextAlign.center,
                                                 ),
-                                                textAlign: TextAlign.center,
                                               ),
                                             ),
                                           ),
@@ -297,20 +307,40 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                           // Email field
                                           _buildTextField(
                                             controller: _emailController,
-                                            label: 'Email',
-                                            hint: 'Enter your email',
+                                            label: TranslationService.translate('email'),
+                                            hint: TranslationService.translate('email'),
                                             icon: Icons.email_outlined,
                                             keyboardType:
                                                 TextInputType.emailAddress,
+                                            onChanged: widget.isLogin ? (value) {
+                                              // Reset validation state when email changes
+                                              if (_emailValidated) {
+                                                setState(() {
+                                                  _emailValidated = false;
+                                                  _hasPasskey = false;
+                                                  _selectedLoginMethod = null;
+                                                });
+                                              }
+                                            } : null,
                                             validator: (value) {
                                               if (value == null ||
                                                   value.isEmpty) {
-                                                return 'Please enter your email';
+                                                return TranslationService.translate('email');
                                               }
                                               if (!RegExp(
                                                 r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
                                               ).hasMatch(value)) {
-                                                return 'Please enter a valid email';
+                                                return TranslationService.translate('email');
+                                              }
+                                              // For login mode, check passkey after email is validated
+                                              if (widget.isLogin && !_emailValidated && value.isNotEmpty && RegExp(
+                                                r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                                              ).hasMatch(value)) {
+                                                Future.microtask(() {
+                                                  if (mounted) {
+                                                    _checkPasskeyForEmail(value.trim());
+                                                  }
+                                                });
                                               }
                                               return null;
                                             },
@@ -318,32 +348,131 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
 
                                           const SizedBox(height: 20),
 
-                                          // Password field
-                                          _buildTextField(
-                                            controller: _passwordController,
-                                            label: 'Password',
-                                            hint: 'Enter your password',
-                                            icon: Icons.lock_outline,
-                                            isPassword: true,
-                                            isPasswordVisible:
-                                                _isPasswordVisible,
-                                            onTogglePassword: () {
-                                              setState(() {
-                                                _isPasswordVisible =
-                                                    !_isPasswordVisible;
-                                              });
-                                            },
-                                            validator: (value) {
-                                              if (value == null ||
-                                                  value.isEmpty) {
-                                                return 'Please enter your password';
-                                              }
-                                              if (value.length < 6) {
-                                                return 'Password must be at least 6 characters';
-                                              }
-                                              return null;
-                                            },
-                                          ),
+                                          // Show login method selection for login mode after email is validated
+                                          if (widget.isLogin && _emailValidated && _hasPasskey) ...[
+                                            // Choose login method (only show if user has passkey)
+                                            Obx(
+                                              () => Text(
+                                                TranslationService.translate('choose_login_method'),
+                                                style: const TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 16),
+                                            
+                                            // Password login option (always available)
+                                            _buildLoginMethodButton(
+                                              icon: Icons.lock_outline,
+                                              title: TranslationService.translate('sign_in_with_password'),
+                                              isSelected: _selectedLoginMethod == 'password',
+                                              onTap: () {
+                                                setState(() {
+                                                  _selectedLoginMethod = 'password';
+                                                });
+                                              },
+                                            ),
+                                            
+                                            // Passkey login option (only if user has passkey)
+                                            const SizedBox(height: 12),
+                                            _buildLoginMethodButton(
+                                              icon: Icons.fingerprint,
+                                              title: TranslationService.translate('sign_in_with_passkey'),
+                                              isSelected: _selectedLoginMethod == 'passkey',
+                                              onTap: () {
+                                                setState(() {
+                                                  _selectedLoginMethod = 'passkey';
+                                                });
+                                              },
+                                            ),
+                                            
+                                            const SizedBox(height: 20),
+                                            
+                                            // Password field (only shown when password method is selected)
+                                            if (_selectedLoginMethod == 'password')
+                                              _buildTextField(
+                                                controller: _passwordController,
+                                                label: TranslationService.translate('password'),
+                                                hint: TranslationService.translate('password'),
+                                                icon: Icons.lock_outline,
+                                                isPassword: true,
+                                                isPasswordVisible:
+                                                    _isPasswordVisible,
+                                                onTogglePassword: () {
+                                                  setState(() {
+                                                    _isPasswordVisible =
+                                                        !_isPasswordVisible;
+                                                  });
+                                                },
+                                                validator: (value) {
+                                                  if (value == null ||
+                                                      value.isEmpty) {
+                                                    return TranslationService.translate('password');
+                                                  }
+                                                  if (value.length < 6) {
+                                                    return TranslationService.translate('password');
+                                                  }
+                                                  return null;
+                                                },
+                                              ),
+                                          ] else if (widget.isLogin) ...[
+                                            // For login without passkey or before email validation, show password field directly
+                                            _buildTextField(
+                                              controller: _passwordController,
+                                              label: TranslationService.translate('password'),
+                                              hint: TranslationService.translate('password'),
+                                              icon: Icons.lock_outline,
+                                              isPassword: true,
+                                              isPasswordVisible:
+                                                  _isPasswordVisible,
+                                              onTogglePassword: () {
+                                                setState(() {
+                                                  _isPasswordVisible =
+                                                      !_isPasswordVisible;
+                                                });
+                                              },
+                                              validator: (value) {
+                                                if (value == null ||
+                                                    value.isEmpty) {
+                                                  return TranslationService.translate('password');
+                                                }
+                                                if (value.length < 6) {
+                                                  return TranslationService.translate('password');
+                                                }
+                                                return null;
+                                              },
+                                            ),
+                                          ] else if (!widget.isLogin) ...[
+                                            // Password field for registration
+                                            _buildTextField(
+                                              controller: _passwordController,
+                                              label: TranslationService.translate('password'),
+                                              hint: TranslationService.translate('password'),
+                                              icon: Icons.lock_outline,
+                                              isPassword: true,
+                                              isPasswordVisible:
+                                                  _isPasswordVisible,
+                                              onTogglePassword: () {
+                                                setState(() {
+                                                  _isPasswordVisible =
+                                                      !_isPasswordVisible;
+                                                });
+                                              },
+                                              validator: (value) {
+                                                if (value == null ||
+                                                    value.isEmpty) {
+                                                  return TranslationService.translate('password');
+                                                }
+                                                if (value.length < 6) {
+                                                  return TranslationService.translate('password');
+                                                }
+                                                return null;
+                                              },
+                                            ),
+                                          ],
 
                                           // Confirm password field (only for register) with animation
                                           AnimatedSwitcher(
@@ -380,9 +509,9 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                                         controller:
                                                             _confirmPasswordController,
                                                         label:
-                                                            'Confirm Password',
+                                                            TranslationService.translate('confirm_password'),
                                                         hint:
-                                                            'Confirm your password',
+                                                            TranslationService.translate('confirm_password'),
                                                         icon:
                                                             Icons.lock_outline,
                                                         isPassword: true,
@@ -397,12 +526,12 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                                         validator: (value) {
                                                           if (value == null ||
                                                               value.isEmpty) {
-                                                            return 'Please confirm your password';
+                                                            return TranslationService.translate('confirm_password');
                                                           }
                                                           if (value !=
                                                               _passwordController
                                                                   .text) {
-                                                            return 'Passwords do not match';
+                                                            return TranslationService.translate('confirm_password');
                                                           }
                                                           return null;
                                                         },
@@ -422,8 +551,22 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                           Obx(() {
                                             final bool isLoading =
                                                 authController.isLoading.value;
+                                            // For login, check if email is valid and password is provided (for password method)
+                                            // For register, check if all fields are valid
+                                            final bool canSubmit = widget.isLogin
+                                                ? (_emailController.text.isNotEmpty &&
+                                                   RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(_emailController.text) &&
+                                                   ((_selectedLoginMethod == 'passkey') || 
+                                                    (_selectedLoginMethod == 'password' && _passwordController.text.isNotEmpty && _passwordController.text.length >= 6) ||
+                                                    (_selectedLoginMethod == null && _passwordController.text.isNotEmpty && _passwordController.text.length >= 6)))
+                                                : (_emailController.text.isNotEmpty &&
+                                                   RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(_emailController.text) &&
+                                                   _passwordController.text.isNotEmpty && 
+                                                   _passwordController.text.length >= 6 &&
+                                                   _confirmPasswordController.text.isNotEmpty &&
+                                                   _confirmPasswordController.text == _passwordController.text);
                                             return GestureDetector(
-                                              onTap: isLoading
+                                              onTap: (isLoading || !canSubmit)
                                                   ? null
                                                   : _handleSubmit,
                                               child: AnimatedContainer(
@@ -436,13 +579,13 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                                       vertical: 16,
                                                     ),
                                                 decoration: BoxDecoration(
-                                                  color: isLoading
+                                                  color: (isLoading || !canSubmit)
                                                       ? Colors.grey[400]
                                                       : Colors.black87,
                                                   borderRadius:
                                                       BorderRadius.circular(12),
                                                   border: Border.all(
-                                                    color: isLoading
+                                                    color: (isLoading || !canSubmit)
                                                         ? Colors.grey[500]!
                                                         : Colors.black87,
                                                   ),
@@ -455,8 +598,8 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                                                   .center,
                                                           mainAxisSize:
                                                               MainAxisSize.min,
-                                                          children: const [
-                                                            SizedBox(
+                                                          children: [
+                                                            const SizedBox(
                                                               width: 18,
                                                               height: 18,
                                                               child: CircularProgressIndicator(
@@ -470,126 +613,42 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                                                     ),
                                                               ),
                                                             ),
-                                                            SizedBox(width: 10),
-                                                            Text(
-                                                              'Iniciando sesión...',
-                                                              style: TextStyle(
-                                                                fontFamily:
-                                                                    'Poppins',
-                                                                fontSize: 16,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w600,
-                                                                color: Colors
-                                                                    .white,
+                                                            const SizedBox(width: 10),
+                                                            Obx(
+                                                              () => Text(
+                                                                TranslationService.translate('sign_in'),
+                                                                style: const TextStyle(
+                                                                  fontFamily:
+                                                                      'Poppins',
+                                                                  fontSize: 16,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                  color: Colors
+                                                                      .white,
+                                                                ),
                                                               ),
                                                             ),
                                                           ],
                                                         )
-                                                      : Text(
-                                                          widget.isLogin
-                                                              ? 'Iniciar sesión'
-                                                              : 'Crear cuenta',
-                                                          style:
-                                                              const TextStyle(
-                                                                fontFamily:
-                                                                    'Poppins',
-                                                                fontSize: 16,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w600,
-                                                                color: Colors
-                                                                    .white,
-                                                              ),
+                                                      : Obx(
+                                                          () => Text(
+                                                            widget.isLogin
+                                                                ? TranslationService.translate('sign_in')
+                                                                : TranslationService.translate('sign_up'),
+                                                            style:
+                                                                const TextStyle(
+                                                                  fontFamily:
+                                                                      'Poppins',
+                                                                  fontSize: 16,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                  color: Colors
+                                                                      .white,
+                                                                ),
+                                                          ),
                                                         ),
-                                                ),
-                                              ),
-                                            );
-                                          }),
-
-                                          const SizedBox(height: 20),
-
-                                          // Divider
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Divider(
-                                                  color: Colors.grey[300],
-                                                ),
-                                              ),
-                                              Padding(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                    ),
-                                                child: Text(
-                                                  'or',
-                                                  style: TextStyle(
-                                                    fontFamily: 'Poppins',
-                                                    fontSize: 14,
-                                                    color: Colors.grey[600],
-                                                  ),
-                                                ),
-                                              ),
-                                              Expanded(
-                                                child: Divider(
-                                                  color: Colors.grey[300],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-
-                                          const SizedBox(height: 20),
-
-                                          // Google login button (disabled while loading)
-                                          Obx(() {
-                                            final bool isLoading =
-                                                authController.isLoading.value;
-                                            return GestureDetector(
-                                              onTap: isLoading
-                                                  ? null
-                                                  : _handleGoogleAuth,
-                                              child: Opacity(
-                                                opacity: isLoading ? 0.6 : 1.0,
-                                                child: Container(
-                                                  width: double.infinity,
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        vertical: 16,
-                                                      ),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          12,
-                                                        ),
-                                                    border: Border.all(
-                                                      color: Colors.black87,
-                                                    ),
-                                                  ),
-                                                  child: Row(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .center,
-                                                    children: [
-                                                      Icon(
-                                                        Icons.g_mobiledata,
-                                                        color: Colors.red[600],
-                                                        size: 24,
-                                                      ),
-                                                      const SizedBox(width: 12),
-                                                      const Text(
-                                                        'Continuar con Google',
-                                                        style: TextStyle(
-                                                          fontFamily: 'Poppins',
-                                                          fontSize: 16,
-                                                          fontWeight:
-                                                              FontWeight.w500,
-                                                          color: Colors.black87,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
                                                 ),
                                               ),
                                             );
@@ -632,19 +691,21 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                             ],
                                           ),
 
-                                          // Forgot password (only for login)
-                                          if (widget.isLogin) ...[
+                                          // Forgot password (only for login and password method)
+                                          if (widget.isLogin && _selectedLoginMethod == 'password') ...[
                                             const SizedBox(height: 16),
                                             Center(
                                               child: GestureDetector(
                                                 onTap: _handleForgotPassword,
-                                                child: Text(
-                                                  'Forgot Password?',
-                                                  style: TextStyle(
-                                                    fontFamily: 'Poppins',
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.w500,
-                                                    color: Colors.blue[600],
+                                                child: Obx(
+                                                  () => Text(
+                                                    TranslationService.translate('forgot_password'),
+                                                    style: TextStyle(
+                                                      fontFamily: 'Poppins',
+                                                      fontSize: 14,
+                                                      fontWeight: FontWeight.w500,
+                                                      color: Colors.blue[600],
+                                                    ),
                                                   ),
                                                 ),
                                               ),
@@ -680,6 +741,7 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
     bool isPasswordVisible = false,
     VoidCallback? onTogglePassword,
     String? Function(String?)? validator,
+    void Function(String)? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -698,6 +760,7 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
           controller: controller,
           keyboardType: keyboardType,
           obscureText: isPassword && !isPasswordVisible,
+          onChanged: onChanged,
           style: const TextStyle(fontFamily: 'Poppins', fontSize: 16),
           decoration: InputDecoration(
             hintText: hint,
@@ -750,12 +813,93 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
   }
 
   void _handleSubmit() async {
-    if (_formKey.currentState!.validate()) {
-      final AuthController authController = Get.find<AuthController>();
+    if (widget.isLogin) {
+      // For login, validate email first
+      if (!_formKey.currentState!.validate()) {
+        return;
+      }
+      
+      // If email is not validated yet, check for passkey (but don't block)
+      if (!_emailValidated) {
+        // Try to check passkey in background, but don't wait
+        _checkPasskeyForEmail(_emailController.text.trim());
+        // Default to password method if not set
+        if (_selectedLoginMethod == null) {
+          _selectedLoginMethod = 'password';
+        }
+      }
+      
+      // If method is still null, default to password
+      if (_selectedLoginMethod == null) {
+        _selectedLoginMethod = 'password';
+      }
+      
+      if (_selectedLoginMethod == 'password') {
+        // Validate password field
+        if (_passwordController.text.isEmpty || _passwordController.text.length < 6) {
+          Get.snackbar(
+            TranslationService.translate('error'),
+            TranslationService.translate('password'),
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.red[100],
+            colorText: Colors.red[800],
+          );
+          return;
+        }
+      }
+    } else {
+      // For registration, validate form
+      if (!_formKey.currentState!.validate()) {
+        return;
+      }
+    }
+    
+    final AuthController authController = Get.find<AuthController>();
 
-      try {
-        if (widget.isLogin) {
-          // Handle login
+    try {
+      if (widget.isLogin) {
+        // Handle login based on selected method
+        if (_selectedLoginMethod == 'passkey') {
+          try {
+            // Handle passkey login
+            final response = await authController.signInWithPasskey(
+              email: _emailController.text.trim(),
+            );
+
+            if (response.user != null && widget.onLoginSuccess != null) {
+              // Show success animation
+              if (mounted) {
+                setState(() {
+                  _showSuccessAnimation = true;
+                });
+              }
+
+              // Wait for animation to complete, then proceed
+              await Future.delayed(const Duration(milliseconds: 1500));
+
+              // Get user profile
+              final profile = await authController.getUserProfile();
+              final name =
+                  profile?['full_name'] ??
+                  response.user!.userMetadata?['full_name'] ??
+                  response.user!.email?.split('@')[0] ??
+                  'User';
+              final email = response.user!.email ?? '';
+
+              widget.onLoginSuccess!(name, email);
+            }
+          } catch (passkeyError) {
+            // Handle passkey-specific errors
+            if (mounted) {
+              _showErrorDialog(
+                title: TranslationService.translate('error'),
+                message: _getPasskeyErrorMessage(passkeyError.toString()),
+              );
+            }
+            return;
+          }
+        } else {
+          // Handle password login
           final response = await authController.signIn(
             email: _emailController.text.trim(),
             password: _passwordController.text,
@@ -785,7 +929,8 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
             // This prevents blocking the UI thread
             widget.onLoginSuccess!(name, email);
           }
-        } else {
+        }
+      } else {
           // Handle registration
           final response = await authController.signUp(
             email: _emailController.text.trim(),
@@ -827,7 +972,7 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
           );
 
           await _showErrorDialog(
-            title: widget.isLogin ? 'Login Failed' : 'Registration Failed',
+            title: TranslationService.translate('error'),
             message: _getErrorMessage(e.toString()),
           );
 
@@ -845,50 +990,95 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
           });
         }
       }
+  }
+
+  Future<void> _checkPasskeyForEmail(String email) async {
+    if (_checkingPasskey) return;
+    
+    setState(() {
+      _checkingPasskey = true;
+    });
+    
+    try {
+      // Check if user exists and has passkey
+      final hasPasskey = await passkey.PasskeyService.hasPasskeysForEmail(email);
+      setState(() {
+        _emailValidated = true;
+        _hasPasskey = hasPasskey;
+        // If user has passkey, don't auto-select method
+        // If no passkey, default to password
+        if (!hasPasskey) {
+          _selectedLoginMethod = 'password';
+        }
+      });
+    } catch (e) {
+      // If error checking, assume no passkey and default to password
+      setState(() {
+        _emailValidated = true;
+        _hasPasskey = false;
+        _selectedLoginMethod = 'password';
+      });
+    } finally {
+      setState(() {
+        _checkingPasskey = false;
+      });
     }
   }
 
-  void _handleGoogleAuth() async {
-    final AuthController authController = Get.find<AuthController>();
-
-    try {
-      // Handle Google authentication
-      await authController.signInWithGoogle();
-
-      // Show success animation
-      if (mounted) {
-        setState(() {
-          _showSuccessAnimation = true;
-        });
-      }
-
-      // Wait for animation to complete
-      await Future.delayed(const Duration(milliseconds: 1500));
-
-      // Note: OAuth redirects will be handled by the auth state listener
-      // This is a placeholder implementation
-    } catch (e) {
-      if (mounted) {
-        _showErrorDialog(
-          title: 'Authentication Failed',
-          message: _getErrorMessage(e.toString()),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _showSuccessAnimation = false;
-        });
-      }
-    }
+  Widget _buildLoginMethodButton({
+    required IconData icon,
+    required String title,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blue[50] : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? Colors.blue[600]! : Colors.black87,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? Colors.blue[600] : Colors.black87,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+            if (isSelected)
+              Icon(
+                Icons.check_circle,
+                color: Colors.blue[600],
+                size: 20,
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _handleForgotPassword() async {
     if (_emailController.text.isEmpty) {
       _showErrorDialog(
-        title: 'Email Required',
-        message:
-            'Please enter your email address first to reset your password.',
+        title: TranslationService.translate('error'),
+        message: TranslationService.translate('enter_email_first'),
       );
       return;
     }
@@ -925,26 +1115,30 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Email Sent',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                Obx(
+                  () => Text(
+                    TranslationService.translate('success'),
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  'Password reset email sent! Please check your inbox and follow the instructions.',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 14,
-                    color: Colors.grey[700],
-                    height: 1.5,
+                Obx(
+                  () => Text(
+                    TranslationService.translate('forgot_password'),
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      color: Colors.grey[700],
+                      height: 1.5,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
                 GestureDetector(
@@ -957,15 +1151,17 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.black87),
                     ),
-                    child: const Text(
-                      'Got It',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
+                    child: Obx(
+                      () => Text(
+                        TranslationService.translate('close'),
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                      textAlign: TextAlign.center,
                     ),
                   ),
                 ),
@@ -977,7 +1173,7 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
     } catch (e) {
       if (mounted) {
         _showErrorDialog(
-          title: 'Reset Failed',
+          title: TranslationService.translate('error'),
           message: _getErrorMessage(e.toString()),
         );
       }
@@ -985,24 +1181,41 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
   }
 
   String _getErrorMessage(String error) {
+    // Use translations for error messages
     if (error.contains('Invalid login credentials')) {
-      return 'Usuario o contraseña incorrectos. Verifica tus datos e inténtalo de nuevo.';
+      return TranslationService.translate('password');
     } else if (error.contains('User already registered')) {
-      return 'Ya existe una cuenta con este correo. Inicia sesión o usa otro correo.';
+      return TranslationService.translate('password');
     } else if (error.contains('Password should be at least')) {
-      return 'La contraseña debe tener al menos 6 caracteres.';
+      return TranslationService.translate('password');
     } else if (error.contains('Invalid email')) {
-      return 'Ingresa un correo electrónico válido.';
+      return TranslationService.translate('email');
     } else if (error.contains('Email not confirmed')) {
-      return 'Confirma tu correo antes de iniciar sesión. Revisa tu bandeja de entrada.';
+      return TranslationService.translate('email');
     } else if (error.contains('Too many requests')) {
-      return 'Demasiados intentos. Espera unos minutos y vuelve a intentar.';
+      return TranslationService.translate('error');
     } else if (error.contains('Email rate limit exceeded')) {
-      return 'Demasiadas solicitudes de restablecimiento. Espera unos minutos antes de intentar de nuevo.';
+      return TranslationService.translate('error');
     } else if (error.contains('User not found')) {
-      return 'No encontramos una cuenta con ese correo. Verifica o crea una nueva cuenta.';
+      return TranslationService.translate('email');
     } else {
-      return 'Ocurrió un error. Inténtalo nuevamente o contacta soporte si persiste.';
+      return TranslationService.translate('error');
+    }
+  }
+
+  String _getPasskeyErrorMessage(String error) {
+    if (error.contains('Device does not support')) {
+      return TranslationService.translate('device_not_support_biometrics');
+    } else if (error.contains('Biometric authentication failed')) {
+      return TranslationService.translate('biometric_authentication_failed');
+    } else if (error.contains('No passkeys found')) {
+      return TranslationService.translate('no_passkeys_found');
+    } else if (error.contains('User not found')) {
+      return TranslationService.translate('no_passkeys_found');
+    } else if (error.contains('Password not found')) {
+      return TranslationService.translate('passkey_registration_incomplete');
+    } else {
+      return TranslationService.translate('passkey_authentication_failed');
     }
   }
 
@@ -1138,15 +1351,17 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                             ),
                           ],
                         ),
-                        child: const Text(
-                          'Try Again',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                        child: Obx(
+                          () => Text(
+                            TranslationService.translate('close'),
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                          textAlign: TextAlign.center,
                         ),
                       ),
                     ),

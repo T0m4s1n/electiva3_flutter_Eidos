@@ -62,6 +62,11 @@ dependencies:
   # Local notifications for reminders
   flutter_local_notifications: ^17.2.3
   timezone: ^0.9.4
+  
+  # Biometric authentication for passkeys
+  local_auth: ^2.3.0
+  crypto: ^3.0.5
+  flutter_secure_storage: ^9.2.2
 
 dev_dependencies:
   flutter_test:

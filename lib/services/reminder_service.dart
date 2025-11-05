@@ -370,7 +370,7 @@ class ReminderService {
           ? AndroidScheduleMode.exact
           : AndroidScheduleMode.exactAllowWhileIdle;
       
-      debugPrint('ReminderService: Using schedule mode: $scheduleMode (${minutesUntilNotification} minutes until notification)');
+      debugPrint('ReminderService: Using schedule mode: $scheduleMode ($minutesUntilNotification minutes until notification)');
       
       await _notifications.zonedSchedule(
         id,
@@ -567,9 +567,7 @@ class ReminderService {
     DateTime? reminderDate = _extractDateTimeFromMessage(message);
 
     // Default to 1 hour from now if no date found
-    if (reminderDate == null) {
-      reminderDate = DateTime.now().add(const Duration(hours: 1));
-    }
+    reminderDate ??= DateTime.now().add(const Duration(hours: 1));
 
     // Extract title (everything after "reminder" or similar keywords)
     String title = message;

@@ -36,7 +36,7 @@ class ChatService {
         final bool autoSyncEnabled = await AdvancedSettingsService.isAutoSyncEnabled();
         if (autoSyncEnabled) {
           debugPrint('ChatService.createConversation - Auto-syncing to Supabase');
-          await _syncService.syncPending();
+        await _syncService.syncPending();
           debugPrint('ChatService.createConversation - Auto-synced to Supabase');
         } else {
           debugPrint('ChatService.createConversation - Auto-sync disabled, skipping Supabase sync');
@@ -173,7 +173,7 @@ class ChatService {
       try {
         final bool autoSyncEnabled = await AdvancedSettingsService.isAutoSyncEnabled();
         if (autoSyncEnabled) {
-          await _syncService.syncPending();
+      await _syncService.syncPending();
         }
       } catch (e) {
         debugPrint('ChatService.updateConversationTitle - Error syncing: $e');
@@ -194,7 +194,7 @@ class ChatService {
       try {
         final bool autoSyncEnabled = await AdvancedSettingsService.isAutoSyncEnabled();
         if (autoSyncEnabled) {
-          await _syncService.syncPending();
+      await _syncService.syncPending();
         }
       } catch (e) {
         debugPrint('ChatService.updateConversationSummary - Error syncing: $e');
@@ -220,7 +220,7 @@ class ChatService {
       try {
         final bool autoSyncEnabled = await AdvancedSettingsService.isAutoSyncEnabled();
         if (autoSyncEnabled) {
-          await _syncService.syncPending();
+      await _syncService.syncPending();
         }
       } catch (e) {
         debugPrint('ChatService.toggleConversationArchive - Error syncing: $e');
@@ -238,7 +238,7 @@ class ChatService {
       try {
         final bool autoSyncEnabled = await AdvancedSettingsService.isAutoSyncEnabled();
         if (autoSyncEnabled) {
-          await _syncService.syncPending();
+      await _syncService.syncPending();
         }
       } catch (e) {
         debugPrint('ChatService.deleteMessage - Error syncing: $e');
@@ -258,9 +258,9 @@ class ChatService {
         try {
           final bool autoSyncEnabled = await AdvancedSettingsService.isAutoSyncEnabled();
           if (autoSyncEnabled) {
-            debugPrint('Deleting conversation from Supabase: $conversationId');
-            await _syncService.deleteConversationFromCloud(conversationId);
-            debugPrint('Successfully deleted from Supabase');
+          debugPrint('Deleting conversation from Supabase: $conversationId');
+          await _syncService.deleteConversationFromCloud(conversationId);
+          debugPrint('Successfully deleted from Supabase');
           } else {
             debugPrint('Auto-sync disabled, skipping Supabase delete');
           }

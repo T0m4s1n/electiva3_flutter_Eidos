@@ -265,14 +265,14 @@ class _HomePageState extends State<HomePage> {
                       children: [
                         Obx(() {
                           // Use ValueKey to prevent unnecessary rebuilds
-                          if (navController.showEditProfile.value) {
+                      if (navController.showEditProfile.value) {
                             return const EditProfilePage(key: ValueKey('edit_profile'));
-                          } else if (navController.showChatView.value) {
+                      } else if (navController.showChatView.value) {
                             return const ChatPage(key: ValueKey('chat'));
-                          } else {
+                      } else {
                             return const ConversationsList(key: ValueKey('conversations'));
-                          }
-                        }),
+                      }
+                    }),
                         // Sync button in bottom right corner
                         if (!navController.showEditProfile.value &&
                             !navController.showChatView.value)
