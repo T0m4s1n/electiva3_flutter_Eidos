@@ -820,9 +820,13 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
       }
       
       // If email is not validated yet, check for passkey (but don't block)
-      if (!_emailValidated) {
+      if (!_emailValidated && mounted) {
         // Try to check passkey in background, but don't wait
-        _checkPasskeyForEmail(_emailController.text.trim());
+        Future.microtask(() {
+          if (mounted) {
+            _checkPasskeyForEmail(_emailController.text.trim());
+          }
+        });
         // Default to password method if not set
         if (_selectedLoginMethod == null) {
           _selectedLoginMethod = 'password';
@@ -877,8 +881,13 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
               // Wait for animation to complete, then proceed
               await Future.delayed(const Duration(milliseconds: 1500));
 
+              // Check if widget is still mounted before proceeding
+              if (!mounted) return;
+
               // Get user profile
               final profile = await authController.getUserProfile();
+              if (!mounted) return;
+
               final name =
                   profile?['full_name'] ??
                   response.user!.userMetadata?['full_name'] ??
@@ -886,7 +895,9 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                   'User';
               final email = response.user!.email ?? '';
 
-              widget.onLoginSuccess!(name, email);
+              if (mounted && widget.onLoginSuccess != null) {
+                widget.onLoginSuccess!(name, email);
+              }
             }
           } catch (passkeyError) {
             // Handle passkey-specific errors
@@ -916,8 +927,13 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
             // Wait for animation to complete, then proceed
             await Future.delayed(const Duration(milliseconds: 1500));
 
+            // Check if widget is still mounted before proceeding
+            if (!mounted) return;
+
             // Get user profile
             final profile = await authController.getUserProfile();
+            if (!mounted) return;
+
             final name =
                 profile?['full_name'] ??
                 response.user!.userMetadata?['full_name'] ??
@@ -927,7 +943,9 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
 
             // Don't wait for sync - let it happen in background
             // This prevents blocking the UI thread
-            widget.onLoginSuccess!(name, email);
+            if (mounted && widget.onLoginSuccess != null) {
+              widget.onLoginSuccess!(name, email);
+            }
           }
         }
       } else {
@@ -951,8 +969,13 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
             // Wait for animation to complete
             await Future.delayed(const Duration(milliseconds: 1500));
 
+            // Check if widget is still mounted before proceeding
+            if (!mounted) return;
+
             // Get user profile
             final profile = await authController.getUserProfile();
+            if (!mounted) return;
+
             final name =
                 profile?['full_name'] ??
                 response.user!.userMetadata?['full_name'] ??
@@ -961,7 +984,9 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
             final email = response.user!.email ?? '';
 
             // Automatically sign in the user
-            widget.onLoginSuccess!(name, email);
+            if (mounted && widget.onLoginSuccess != null) {
+              widget.onLoginSuccess!(name, email);
+            }
           }
         }
       } catch (e) {
@@ -993,35 +1018,43 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
   }
 
   Future<void> _checkPasskeyForEmail(String email) async {
-    if (_checkingPasskey) return;
+    if (_checkingPasskey || !mounted) return;
     
-    setState(() {
-      _checkingPasskey = true;
-    });
+    if (mounted) {
+      setState(() {
+        _checkingPasskey = true;
+      });
+    }
     
     try {
       // Check if user exists and has passkey
       final hasPasskey = await passkey.PasskeyService.hasPasskeysForEmail(email);
-      setState(() {
-        _emailValidated = true;
-        _hasPasskey = hasPasskey;
-        // If user has passkey, don't auto-select method
-        // If no passkey, default to password
-        if (!hasPasskey) {
-          _selectedLoginMethod = 'password';
-        }
-      });
+      if (mounted) {
+        setState(() {
+          _emailValidated = true;
+          _hasPasskey = hasPasskey;
+          // If user has passkey, don't auto-select method
+          // If no passkey, default to password
+          if (!hasPasskey) {
+            _selectedLoginMethod = 'password';
+          }
+        });
+      }
     } catch (e) {
       // If error checking, assume no passkey and default to password
-      setState(() {
-        _emailValidated = true;
-        _hasPasskey = false;
-        _selectedLoginMethod = 'password';
-      });
+      if (mounted) {
+        setState(() {
+          _emailValidated = true;
+          _hasPasskey = false;
+          _selectedLoginMethod = 'password';
+        });
+      }
     } finally {
-      setState(() {
-        _checkingPasskey = false;
-      });
+      if (mounted) {
+        setState(() {
+          _checkingPasskey = false;
+        });
+      }
     }
   }
 
