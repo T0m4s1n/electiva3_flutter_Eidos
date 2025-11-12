@@ -90,43 +90,138 @@ class ChatController extends GetxController {
     }
   }
 
-  /// Detect if the message is requesting document creation
-  bool _isDocumentRequest(String messageText) {
-    final String lowerMessage = messageText.toLowerCase();
+  /// Calculate Levenshtein distance between two strings (for typo tolerance)
+  int _levenshteinDistance(String s1, String s2) {
+    if (s1.isEmpty) return s2.length;
+    if (s2.isEmpty) return s1.length;
 
-    final List<String> documentKeywords = [
-      'crear un documento',
-      'escribir un documento',
-      'crea un documento',
-      'escribe un documento',
-      'crear documento',
-      'escribir documento',
-      'generar un documento',
-      'hacer un documento',
-      'redactar un documento',
-      'componer un documento',
-      'elaborar un documento',
-      'diseñar un documento',
-      'crear un texto',
-      'escribir un texto',
-      'redactar un texto',
-      'hacer una redacción',
-      'crear un escrito',
-      'elaborar un escrito',
-      'create a document',
-      'write a document',
-      'make a document',
-      'generate a document',
-      'compose a document',
-      'draft a document',
-      'write me a',
-      'create me a',
-      'make me a',
-      'generate me a',
-      'draft me a',
+    final matrix = List.generate(
+      s1.length + 1,
+      (i) => List.generate(s2.length + 1, (j) => 0),
+    );
+
+    for (int i = 0; i <= s1.length; i++) {
+      matrix[i][0] = i;
+    }
+    for (int j = 0; j <= s2.length; j++) {
+      matrix[0][j] = j;
+    }
+
+    for (int i = 1; i <= s1.length; i++) {
+      for (int j = 1; j <= s2.length; j++) {
+        final cost = s1[i - 1] == s2[j - 1] ? 0 : 1;
+        matrix[i][j] = [
+          matrix[i - 1][j] + 1, // deletion
+          matrix[i][j - 1] + 1, // insertion
+          matrix[i - 1][j - 1] + cost, // substitution
+        ].reduce((a, b) => a < b ? a : b);
+      }
+    }
+
+    return matrix[s1.length][s2.length];
+  }
+
+  /// Check if a word matches a keyword with typo tolerance
+  bool _fuzzyMatch(String word, String keyword, {int maxDistance = 2}) {
+    if (word.length < 3) return word == keyword;
+    
+    // Exact match
+    if (word == keyword) return true;
+    
+    // Check if word contains keyword or vice versa (for partial matches)
+    if (word.contains(keyword) || keyword.contains(word)) return true;
+    
+    // Calculate Levenshtein distance
+    final distance = _levenshteinDistance(word, keyword);
+    final maxAllowedDistance = (keyword.length * 0.3).ceil().clamp(1, maxDistance);
+    
+    return distance <= maxAllowedDistance;
+  }
+
+  /// Detect if the message is requesting document creation (with typo tolerance)
+  bool _isDocumentRequest(String messageText) {
+    final String lowerMessage = messageText.toLowerCase().trim();
+
+    // Base keywords for document creation
+    final List<String> actionKeywords = [
+      'crear', 'crea',
+      'escribir', 'escribe',
+      'generar', 'genera',
+      'hacer', 'haz',
+      'redactar', 'redacta',
+      'componer', 'compone',
+      'elaborar', 'elabora',
+      'diseñar', 'diseña',
+      'create', 'write', 'make', 'generate', 'compose', 'draft',
     ];
 
-    return documentKeywords.any((keyword) => lowerMessage.contains(keyword));
+    final List<String> documentKeywords = [
+      'documento', 'document',
+      'texto', 'text',
+      'escrito', 'escrit',
+      'redacción', 'redaccion',
+    ];
+
+    // Check for action + document pattern (e.g., "crea un documento")
+    for (final action in actionKeywords) {
+      for (final doc in documentKeywords) {
+        // Check exact patterns
+        final patterns = [
+          '$action un $doc',
+          '$action $doc',
+          '$action un $doc',
+          '$action me un $doc',
+          '$action me $doc',
+        ];
+
+        for (final pattern in patterns) {
+          if (lowerMessage.contains(pattern)) return true;
+        }
+
+        // Check with fuzzy matching for typos
+        final words = lowerMessage.split(RegExp(r'\s+'));
+        for (int i = 0; i < words.length - 1; i++) {
+          final word1 = words[i].replaceAll(RegExp(r'[^\w]'), '');
+          final word2 = words[i + 1].replaceAll(RegExp(r'[^\w]'), '');
+          
+          // Check if word1 matches action and word2 matches document (with typos)
+          if (_fuzzyMatch(word1, action) && _fuzzyMatch(word2, doc)) {
+            return true;
+          }
+          
+          // Also check for "un" or "una" between them
+          if (i < words.length - 2) {
+            final word3 = words[i + 2].replaceAll(RegExp(r'[^\w]'), '');
+            if (_fuzzyMatch(word1, action) && 
+                (words[i + 1] == 'un' || words[i + 1] == 'una' || words[i + 1] == 'a') &&
+                _fuzzyMatch(word3, doc)) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+
+    // Also check for common patterns with typos in "documento"
+    final documentoVariations = [
+      'documento', 'documenro', 'documeto', 'documnto', 'docuemnto',
+      'document', 'documet', 'documnt', 'docuemnt',
+    ];
+
+    for (final docVar in documentoVariations) {
+      for (final action in actionKeywords) {
+        final patterns = [
+          '$action un $docVar',
+          '$action $docVar',
+          '$action me un $docVar',
+        ];
+        for (final pattern in patterns) {
+          if (lowerMessage.contains(pattern)) return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   /// Check if message contains document-related keywords
@@ -186,6 +281,14 @@ class ChatController extends GetxController {
           isDocumentMode.value = true;
         }
 
+        // Update conversation title if this is the first message
+        final List<MessageLocal> existingMessages = await ChatService.getMessages(
+          currentConversationId.value,
+        );
+        if (existingMessages.isEmpty || existingMessages.every((m) => m.role == 'system')) {
+          await _updateConversationTitle(messageText);
+        }
+
         // In document mode, generate document with checklist
         // Skip reminder detection entirely when in document mode
         await generateDocumentWithChecklist(messageText);
@@ -193,47 +296,47 @@ class ChatController extends GetxController {
       }
 
       // Regular chat mode (NOT document mode)
-      // Add user message to the chat
+        // Add user message to the chat
 
-      final MessageLocal userMessage = await ChatService.createUserMessage(
-        conversationId: currentConversationId.value,
-        text: messageText,
-      );
+        final MessageLocal userMessage = await ChatService.createUserMessage(
+          conversationId: currentConversationId.value,
+          text: messageText,
+        );
 
-      // Verify the message was saved to database
-      await Future.delayed(
-        const Duration(milliseconds: 200),
-      ); // Give time for DB to save
-      final List<MessageLocal> verifyMessages = await ChatService.getMessages(
-        currentConversationId.value,
-      );
-      final int userMsgCount = verifyMessages
-          .where((m) => m.role == 'user')
-          .length;
-      debugPrint(
-        'Verification: Found ${verifyMessages.length} total messages in database',
-      );
-      debugPrint(
-        'Verification: Found $userMsgCount user messages in database',
-      );
+        // Verify the message was saved to database
+        await Future.delayed(
+          const Duration(milliseconds: 200),
+        ); // Give time for DB to save
+        final List<MessageLocal> verifyMessages = await ChatService.getMessages(
+          currentConversationId.value,
+        );
+        final int userMsgCount = verifyMessages
+            .where((m) => m.role == 'user')
+            .length;
+        debugPrint(
+          'Verification: Found ${verifyMessages.length} total messages in database',
+        );
+        debugPrint(
+          'Verification: Found $userMsgCount user messages in database',
+        );
 
-      messages.add(userMessage);
-      hasMessages.value = true;
+        messages.add(userMessage);
+        hasMessages.value = true;
 
-      debugPrint(
-        'Added user message to observable list. Total messages: ${messages.length}',
-      );
+        debugPrint(
+          'Added user message to observable list. Total messages: ${messages.length}',
+        );
 
-      // Update conversation title and generate context if it's the first message
-      if (messages.length == 1) {
-        await _updateConversationTitle(messageText);
+        // Update conversation title and generate context if it's the first message
+        if (messages.length == 1) {
+          await _updateConversationTitle(messageText);
 
-        // Generate and save context for personalized AI responses
-        await _generateAndSaveContext(messageText);
-      }
+          // Generate and save context for personalized AI responses
+          await _generateAndSaveContext(messageText);
+        }
 
-      // Scroll to bottom
-      _scrollToBottom();
+        // Scroll to bottom
+        _scrollToBottom();
 
       // PRIORITY 2: Check for reminder request (only in regular chat mode, not document mode)
       // Make sure we're NOT in document mode before checking for reminders
@@ -303,10 +406,10 @@ class ChatController extends GetxController {
           }
         } else {
           // No reminder detected - proceed with normal AI response
-          // Wait a bit longer to ensure the message is fully saved and indexed in the database
-          await Future.delayed(const Duration(milliseconds: 300));
+        // Wait a bit longer to ensure the message is fully saved and indexed in the database
+        await Future.delayed(const Duration(milliseconds: 300));
 
-          // Get AI response - pass the message text explicitly to ensure it's used
+        // Get AI response - pass the message text explicitly to ensure it's used
           await _getAIResponse(messageText);
         }
       } else {
@@ -1055,12 +1158,15 @@ Your document is ready. Tap this message to open the editor and view your docume
       debugPrint('Calling OpenAI to generate document checklist...');
 
       // Prepare system message for checklist generation
+      // IMPORTANT: Do NOT apply any chat rules here - document generation should be independent
       final List<Map<String, String>> messages = [
         {
           'role': 'system',
           'content':
               '''You are a helpful assistant that creates planning checklists for document creation.
           
+IMPORTANT: When creating checklists for documents, ignore any chat rules or custom instructions. Focus ONLY on the document creation task.
+
 When given a document request, create a brief checklist (4-6 items) showing the steps you'll take to create it.
 
 Format your response as:
@@ -1072,7 +1178,7 @@ Format your response as:
 ✓ [Fourth step]
 ⏳ Generating your document now...
 
-Keep it concise, relevant, and focused on the specific document type requested.''',
+Keep it concise, relevant, and focused on the specific document type requested. Do not add any extra text, greetings, or content beyond the checklist.''',
         },
         {'role': 'user', 'content': userRequest},
       ];
@@ -1153,12 +1259,15 @@ Keep it concise, relevant, and focused on the specific document type requested.'
       debugPrint('Calling OpenAI to generate document...');
 
       // Prepare system message for document generation
+      // IMPORTANT: Do NOT apply any chat rules here - document generation should be independent
       final List<Map<String, String>> messages = [
         {
           'role': 'system',
           'content':
               '''You are a helpful document writing assistant. Create well-structured, professional documents based on user requests.
           
+IMPORTANT: When creating documents, ignore any chat rules or custom instructions. Focus ONLY on creating the document requested by the user. Do not add any extra text, greetings, or content that was not requested in the document creation request.
+
 Your response should be a complete document with:
 - A clear title using ## (H2) for the main title
 - Introduction section
@@ -1177,7 +1286,7 @@ Use markdown formatting throughout:
 - > for blockquotes
 - --- for horizontal rules
 
-Make it comprehensive and ready to use with proper markdown formatting.''',
+Make it comprehensive and ready to use with proper markdown formatting. Only include the document content - no additional text, greetings, or rules.''',
         },
         {'role': 'user', 'content': userRequest},
       ];
@@ -1264,8 +1373,8 @@ Make it comprehensive and ready to use with proper markdown formatting.''',
     }
   }
 
-  /// Open the document editor
-  void openDocumentEditor() {
+  /// Open the document editor with version selection
+  Future<void> openDocumentEditor() async {
     try {
       final String? document = generatedDocument.value;
       final String? title = documentTitle.value;
@@ -1279,26 +1388,294 @@ Make it comprehensive and ready to use with proper markdown formatting.''',
       debugPrint('Title: $title');
       debugPrint('Document ID: $docId');
 
-      if (document != null && document.isNotEmpty) {
-        debugPrint(
-          'Opening DocumentEditor with content length: ${document.length}',
+      if (docId == null || docId.isEmpty) {
+        // No document ID, open with current content
+        if (document != null && document.isNotEmpty) {
+          _openDocumentEditorWithContent(
+            title: title ?? 'Document',
+            content: document,
+            documentId: null,
+          );
+        } else {
+          _showErrorSnackbar('No document available to open');
+        }
+        return;
+      }
+
+      // Get saved version from conversation context
+      final savedVersion = await _getSavedDocumentVersion();
+      
+      // Get all versions
+      final versions = await DocumentService.getDocumentVersions(docId);
+      final currentDoc = await DocumentService.getDocument(docId);
+      
+      // If there are multiple versions, show selector
+      if (versions.isNotEmpty || (currentDoc != null && (currentDoc['version_number'] as int? ?? 1) > 1)) {
+        await _showVersionSelector(
+          docId: docId,
+          title: title ?? 'Document',
+          savedVersion: savedVersion,
+          currentDoc: currentDoc,
+          versions: versions,
         );
-        Get.to(
-          () => DocumentEditor(
-            documentTitle: title ?? 'Document',
-            documentContent: document,
-            documentId: docId,
-          ),
-        );
-        debugPrint('Document editor opened successfully');
       } else {
-        debugPrint('No document available - showing error snackbar');
-        _showErrorSnackbar('No document available to open');
+        // Only one version or no versions, open directly
+        final content = currentDoc?['content'] as String? ?? document ?? '';
+        _openDocumentEditorWithContent(
+          title: title ?? 'Document',
+          content: content,
+          documentId: docId,
+        );
       }
     } catch (e, stackTrace) {
       debugPrint('Error opening document editor: $e');
       debugPrint('Stack trace: $stackTrace');
       _showErrorSnackbar('Error opening document editor: $e');
+    }
+  }
+
+  /// Get saved document version from conversation context
+  Future<int?> _getSavedDocumentVersion() async {
+    try {
+      final conversation = await ChatService.getConversation(currentConversationId.value);
+      if (conversation?.context == null) return null;
+      
+      final context = jsonDecode(conversation!.context!) as Map<String, dynamic>?;
+      if (context == null) return null;
+      
+      final docInfo = context['document'] as Map<String, dynamic>?;
+      if (docInfo == null) return null;
+      
+      return docInfo['version_number'] as int?;
+    } catch (e) {
+      debugPrint('Error getting saved document version: $e');
+      return null;
+    }
+  }
+
+  /// Save document version to conversation context
+  Future<void> _saveDocumentVersion(String documentId, int versionNumber) async {
+    try {
+      final conversation = await ChatService.getConversation(currentConversationId.value);
+      if (conversation == null) return;
+      
+      Map<String, dynamic> context = {};
+      if (conversation.context != null) {
+        try {
+          context = jsonDecode(conversation.context!) as Map<String, dynamic>;
+        } catch (e) {
+          debugPrint('Error parsing context: $e');
+        }
+      }
+      
+      context['document'] = {
+        'document_id': documentId,
+        'version_number': versionNumber,
+      };
+      
+      await ChatService.updateConversationContext(
+        currentConversationId.value,
+        jsonEncode(context),
+      );
+    } catch (e) {
+      debugPrint('Error saving document version: $e');
+    }
+  }
+
+  /// Show version selector dialog
+  Future<void> _showVersionSelector({
+    required String docId,
+    required String title,
+    int? savedVersion,
+    Map<String, dynamic>? currentDoc,
+    required List<Map<String, dynamic>> versions,
+  }) async {
+    final currentVersion = currentDoc?['version_number'] as int? ?? 1;
+    final currentContent = currentDoc?['content'] as String? ?? '';
+    
+    // Build list of versions (current + historical)
+    final List<Map<String, dynamic>> allVersions = [];
+    
+    // Add current version
+    allVersions.add({
+      'version_number': currentVersion,
+      'content': currentContent,
+      'is_current': true,
+      'created_at': currentDoc?['updated_at'] as String? ?? DateTime.now().toIso8601String(),
+      'change_summary': null,
+    });
+    
+    // Add historical versions
+    for (final version in versions) {
+      allVersions.add({
+        'version_number': version['version_number'] as int? ?? 0,
+        'content': version['content'] as String? ?? '',
+        'is_current': false,
+        'created_at': version['created_at'] as String? ?? '',
+        'change_summary': version['change_summary'] as String?,
+      });
+    }
+    
+    // Sort by version number descending
+    allVersions.sort((a, b) => (b['version_number'] as int).compareTo(a['version_number'] as int));
+    
+    // Show dialog
+    final selectedVersion = await showDialog<Map<String, dynamic>>(
+      context: Get.context!,
+      builder: (context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            'Select Document Version',
+            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.bold),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: allVersions.length,
+              itemBuilder: (context, index) {
+                final version = allVersions[index];
+                final versionNum = version['version_number'] as int;
+                final isCurrent = version['is_current'] as bool;
+                final changeSummary = version['change_summary'] as String?;
+                final createdAt = version['created_at'] as String?;
+                
+                return ListTile(
+                  title: Row(
+                    children: [
+                      Text(
+                        'Version $versionNum',
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (isCurrent) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'Current',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 10,
+                              color: Colors.green,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (savedVersion != null && versionNum == savedVersion) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'Saved',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 10,
+                              color: Colors.blue,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (createdAt != null)
+                        Text(
+                          _formatDate(createdAt),
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12,
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          ),
+                        ),
+                      if (changeSummary != null && changeSummary.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          changeSummary,
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic,
+                            color: isDark ? Colors.grey[300] : Colors.grey[700],
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                  onTap: () => Navigator.pop(context, version),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins')),
+            ),
+          ],
+        );
+      },
+    );
+    
+    if (selectedVersion != null) {
+      final versionNum = selectedVersion['version_number'] as int;
+      final content = selectedVersion['content'] as String? ?? '';
+      
+      // Save selected version to context
+      await _saveDocumentVersion(docId, versionNum);
+      
+      // Open editor with selected version
+      _openDocumentEditorWithContent(
+        title: title,
+        content: content,
+        documentId: docId,
+      );
+    }
+  }
+
+  /// Open document editor with specific content
+  void _openDocumentEditorWithContent({
+    required String title,
+    required String content,
+    String? documentId,
+  }) {
+    Navigator.of(Get.context!).push(
+      MaterialPageRoute(
+        builder: (context) => DocumentEditor(
+          documentTitle: title,
+          documentContent: content,
+          documentId: documentId,
+          conversationId: currentConversationId.value,
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(String? dateString) {
+    if (dateString == null) return 'Unknown date';
+    try {
+      final date = DateTime.parse(dateString);
+      return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return dateString;
     }
   }
 
@@ -1421,7 +1798,109 @@ Make it comprehensive and ready to use with proper markdown formatting.''',
           generatedDocument.value = content['text'] as String;
           documentTitle.value = conversation.title ?? 'Document';
           isDocumentMode.value = true;
+          
+          // Try to get document ID from conversation context
+          if (conversation.context != null) {
+            try {
+              final context = jsonDecode(conversation.context!) as Map<String, dynamic>?;
+              final docInfo = context?['document'] as Map<String, dynamic>?;
+              if (docInfo != null) {
+                final docId = docInfo['document_id'] as String?;
+                if (docId != null && docId.isNotEmpty) {
+                  currentDocumentId.value = docId;
+                  
+                  // Try to load the saved version
+                  final savedVersion = docInfo['version_number'] as int?;
+                  if (savedVersion != null) {
+                    try {
+                      final versions = await DocumentService.getDocumentVersions(docId);
+                      final version = versions.firstWhere(
+                        (v) => (v['version_number'] as int? ?? 0) == savedVersion,
+                        orElse: () => {},
+                      );
+                      
+                      if (version.isNotEmpty) {
+                        final versionContent = version['content'] as String?;
+                        if (versionContent != null && versionContent.isNotEmpty) {
+                          generatedDocument.value = versionContent;
+                        }
+                      } else {
+                        // If saved version not found, try to get current document
+                        final currentDoc = await DocumentService.getDocument(docId);
+                        if (currentDoc != null) {
+                          final currentVersion = currentDoc['version_number'] as int? ?? 1;
+                          if (currentVersion == savedVersion) {
+                            final currentContent = currentDoc['content'] as String?;
+                            if (currentContent != null && currentContent.isNotEmpty) {
+                              generatedDocument.value = currentContent;
+                            }
+                          }
+                        }
+                      }
+                    } catch (e) {
+                      debugPrint('Error loading saved document version: $e');
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              debugPrint('Error parsing conversation context: $e');
+            }
+          }
+          
           break; // Only need to restore the first document
+        }
+      }
+      
+      // Also check if there's a document ID in context but no document message
+      if (currentDocumentId.value == null && conversation.context != null) {
+        try {
+          final context = jsonDecode(conversation.context!) as Map<String, dynamic>?;
+          final docInfo = context?['document'] as Map<String, dynamic>?;
+          if (docInfo != null) {
+            final docId = docInfo['document_id'] as String?;
+            if (docId != null && docId.isNotEmpty) {
+              currentDocumentId.value = docId;
+              isDocumentMode.value = true;
+              
+              // Try to load the document
+              try {
+                final doc = await DocumentService.getDocument(docId);
+                if (doc != null) {
+                  final savedVersion = docInfo['version_number'] as int?;
+                  final currentVersion = doc['version_number'] as int? ?? 1;
+                  
+                  if (savedVersion != null && savedVersion != currentVersion) {
+                    // Load the saved version
+                    final versions = await DocumentService.getDocumentVersions(docId);
+                    final version = versions.firstWhere(
+                      (v) => (v['version_number'] as int? ?? 0) == savedVersion,
+                      orElse: () => {},
+                    );
+                    
+                    if (version.isNotEmpty) {
+                      final versionContent = version['content'] as String?;
+                      if (versionContent != null && versionContent.isNotEmpty) {
+                        generatedDocument.value = versionContent;
+                        documentTitle.value = doc['title'] as String? ?? conversation.title ?? 'Document';
+                      }
+                    }
+                  } else {
+                    // Load current version
+                    final content = doc['content'] as String?;
+                    if (content != null && content.isNotEmpty) {
+                      generatedDocument.value = content;
+                      documentTitle.value = doc['title'] as String? ?? conversation.title ?? 'Document';
+                    }
+                  }
+                }
+              } catch (e) {
+                debugPrint('Error loading document: $e');
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Error parsing conversation context for document: $e');
         }
       }
 

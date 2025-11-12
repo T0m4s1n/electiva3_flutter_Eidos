@@ -16,6 +16,7 @@ class DocumentService {
     required String title,
     required String content,
     String? documentId,
+    String? changeSummary,
   }) async {
     try {
       final String? userId = AuthService.currentUser?.id;
@@ -39,6 +40,7 @@ class DocumentService {
           documentId: documentId,
           content: content,
           userId: userId,
+          changeSummary: changeSummary,
         );
       } else {
         // Create a new document in Supabase
@@ -102,50 +104,107 @@ class DocumentService {
     required String documentId,
     required String content,
     required String userId,
+    String? changeSummary,
   }) async {
-    // Get current version
-    final currentDoc = await _supabase
-        .from('documents')
-        .select()
-        .eq('id', documentId)
-        .single();
-
-    final int newVersion = (currentDoc['version_number'] as int) + 1;
     final String now = DateTime.now().toUtc().toIso8601String();
+    int currentVersion = 1;
+    String oldContent = '';
 
-    // Mark old version as not current
-    await _supabase
-        .from('documents')
-        .update({'is_current_version': false})
-        .eq('id', documentId);
+    // Get current version from Supabase if available
+    try {
+      final currentDoc = await _supabase
+          .from('documents')
+          .select()
+          .eq('id', documentId)
+          .single();
 
-    // Create new version in document_versions table
-    await _supabase.from('document_versions').insert({
-      'id': IdGenerator.generateConversationId(),
-      'document_id': documentId,
-      'user_id': userId,
-      'content': content,
-      'version_number': newVersion - 1,
-      'created_at': now,
-      'created_by': userId,
-    });
+      currentVersion = currentDoc['version_number'] as int;
+      oldContent = currentDoc['content'] as String;
+    } catch (e) {
+      // If Supabase fails, try local storage
+      debugPrint('DocumentService: Could not get version from Supabase, trying local: $e');
+      final localDoc = await _getDocumentLocally(documentId);
+      if (localDoc != null) {
+        currentVersion = localDoc['version_number'] as int? ?? 1;
+        oldContent = localDoc['content'] as String? ?? '';
+      }
+    }
 
-    // Update current document
-    await _supabase.from('documents').update({
-      'content': content,
-      'version_number': newVersion,
-      'updated_at': now,
-    }).eq('id', documentId);
+    final int newVersion = currentVersion + 1;
 
-    // Upload new version to storage
-    await _uploadToStorage(
-      userId: userId,
+    // Save the OLD version content to document_versions table (both Supabase and local)
+    final versionId = IdGenerator.generateConversationId();
+    
+    // Save locally first
+    await _saveVersionLocally(
+      versionId: versionId,
       documentId: documentId,
-      content: content,
-      version: newVersion,
+      content: oldContent,
+      versionNumber: currentVersion,
+      userId: userId,
+      changeSummary: changeSummary,
     );
 
-    debugPrint('DocumentService: Created version $newVersion');
+    // Try to save to Supabase if user is authenticated
+    if (userId.isNotEmpty) {
+      try {
+        await _supabase.from('document_versions').insert({
+          'id': versionId,
+          'document_id': documentId,
+          'user_id': userId,
+          'content': oldContent,
+          'version_number': currentVersion,
+          'created_at': now,
+          'created_by': userId,
+          'change_summary': changeSummary,
+        });
+
+        // Upload old version to storage
+        await _uploadToStorage(
+          userId: userId,
+          documentId: documentId,
+          content: oldContent,
+          version: currentVersion,
+        );
+      } catch (e) {
+        debugPrint('DocumentService: Failed to save version to Supabase: $e');
+      }
+    }
+
+    // Update document to new version (both Supabase and local)
+    // Update local first
+    await _updateDocumentLocally(
+      documentId: documentId,
+      content: content,
+      versionNumber: newVersion,
+    );
+
+    // Try to update Supabase
+    if (userId.isNotEmpty) {
+      try {
+        await _supabase
+            .from('documents')
+            .update({
+              'content': content,
+              'version_number': newVersion,
+              'is_current_version': true,
+              'updated_at': now,
+            })
+            .eq('id', documentId);
+
+        // Upload new version to storage
+        await _uploadToStorage(
+          userId: userId,
+          documentId: documentId,
+          content: content,
+          version: newVersion,
+        );
+      } catch (e) {
+        debugPrint('DocumentService: Failed to update document in Supabase: $e');
+      }
+    }
+
+    debugPrint('DocumentService: Created version $newVersion (saved version $currentVersion to history)');
   }
 
   /// Upload document content to Supabase Storage
@@ -162,9 +221,9 @@ class DocumentService {
       await _supabase.storage.from(_bucketName).uploadBinary(
         path,
         utf8.encode(jsonContent),
-        fileOptions: const FileOptions(
+        fileOptions: FileOptions(
           cacheControl: '3600',
-          upsert: false,
+          upsert: true, // Allow overwriting if version already exists
         ),
       );
 
@@ -187,6 +246,29 @@ class DocumentService {
     final String? userId = AuthService.currentUser?.id;
 
     final Database db = await ChatDatabase.instance;
+    
+    // Check if document exists to determine if we need to create a version
+    final existingDoc = await _getDocumentLocally(docId);
+    bool isNewDocument = existingDoc == null;
+    
+    if (!isNewDocument && documentId != null) {
+      // This is an update - save current version before updating
+      final oldContent = existingDoc['content'] as String? ?? '';
+      final oldVersion = existingDoc['version_number'] as int? ?? 1;
+      
+      if (oldContent.isNotEmpty && oldContent != content) {
+        // Save old version
+        await _saveVersionLocally(
+          versionId: IdGenerator.generateConversationId(),
+          documentId: docId,
+          content: oldContent,
+          versionNumber: oldVersion,
+          userId: userId,
+        );
+      }
+    }
+
+    // Update or insert document
     await db.insert(
       'documents',
       {
@@ -196,8 +278,8 @@ class DocumentService {
         'title': title,
         'content': content,
         'is_current_version': 1,
-        'version_number': 1,
-        'created_at': now,
+        'version_number': isNewDocument ? 1 : ((existingDoc['version_number'] as int? ?? 1) + 1),
+        'created_at': existingDoc?['created_at'] as String? ?? now,
         'updated_at': now,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
@@ -283,26 +365,148 @@ class DocumentService {
     return results.map((row) => row as Map<String, dynamic>).toList();
   }
 
-  /// Get document versions
+  /// Get document versions (from both Supabase and local storage)
   static Future<List<Map<String, dynamic>>> getDocumentVersions(
     String documentId,
   ) async {
     try {
       final String? userId = AuthService.currentUser?.id;
+      List<Map<String, dynamic>> versions = [];
 
-      if (userId == null) return [];
+      // Try to get from Supabase first if user is authenticated
+      if (userId != null && userId.isNotEmpty) {
+        try {
+          final response = await _supabase
+              .from('document_versions')
+              .select()
+              .eq('document_id', documentId)
+              .eq('user_id', userId)
+              .order('version_number', ascending: false);
 
-      final response = await _supabase
-          .from('document_versions')
-          .select()
-          .eq('document_id', documentId)
-          .eq('user_id', userId)
-          .order('version_number', ascending: false);
+          versions = List<Map<String, dynamic>>.from(response);
+        } catch (e) {
+          debugPrint('DocumentService: Error getting versions from Supabase - $e');
+        }
+      }
 
-      return List<Map<String, dynamic>>.from(response);
+      // Always get from local storage
+      final localVersions = await _getVersionsLocally(documentId);
+      
+      // Merge versions, avoiding duplicates (prefer Supabase if both exist)
+      final Map<int, Map<String, dynamic>> versionMap = {};
+      
+      // Add local versions first
+      for (final version in localVersions) {
+        final versionNum = version['version_number'] as int? ?? 0;
+        versionMap[versionNum] = version;
+      }
+      
+      // Override with Supabase versions if they exist
+      for (final version in versions) {
+        final versionNum = version['version_number'] as int? ?? 0;
+        versionMap[versionNum] = version;
+      }
+
+      // Convert back to list and sort
+      final mergedVersions = versionMap.values.toList()
+        ..sort((a, b) {
+          final aNum = a['version_number'] as int? ?? 0;
+          final bNum = b['version_number'] as int? ?? 0;
+          return bNum.compareTo(aNum); // Descending order
+        });
+
+      return mergedVersions;
     } catch (e) {
       debugPrint('DocumentService: Error getting versions - $e');
+      // Fallback to local only
+      return await _getVersionsLocally(documentId);
+    }
+  }
+
+  /// Save version locally
+  static Future<void> _saveVersionLocally({
+    required String versionId,
+    required String documentId,
+    required String content,
+    required int versionNumber,
+    required String? userId,
+    String? changeSummary,
+  }) async {
+    try {
+      final Database db = await ChatDatabase.instance;
+      final String now = DateTime.now().toUtc().toIso8601String();
+      
+      // Get conversation_id from document
+      final doc = await _getDocumentLocally(documentId);
+      final conversationId = doc?['conversation_id'] as String? ?? '';
+
+      await db.insert(
+        'document_versions',
+        {
+          'id': versionId,
+          'document_id': documentId,
+          'conversation_id': conversationId,
+          'user_id': userId,
+          'content': content,
+          'version_number': versionNumber,
+          'created_at': now,
+          'created_by': userId,
+          'change_summary': changeSummary,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      debugPrint('DocumentService: Saved version $versionNumber locally');
+    } catch (e) {
+      debugPrint('DocumentService: Error saving version locally - $e');
+    }
+  }
+
+  /// Get versions from local SQLite
+  static Future<List<Map<String, dynamic>>> _getVersionsLocally(
+    String documentId,
+  ) async {
+    try {
+      final Database db = await ChatDatabase.instance;
+      final List<Map<String, Object?>> results = await db.query(
+        'document_versions',
+        where: 'document_id = ?',
+        whereArgs: [documentId],
+        orderBy: 'version_number DESC',
+      );
+
+      return results.map((row) => row as Map<String, dynamic>).toList();
+    } catch (e) {
+      debugPrint('DocumentService: Error getting versions locally - $e');
       return [];
+    }
+  }
+
+  /// Update document locally
+  static Future<void> _updateDocumentLocally({
+    required String documentId,
+    required String content,
+    required int versionNumber,
+  }) async {
+    try {
+      final Database db = await ChatDatabase.instance;
+      final String now = DateTime.now().toUtc().toIso8601String();
+
+      await db.update(
+        'documents',
+        {
+          'content': content,
+          'version_number': versionNumber,
+          'is_current_version': 1,
+          'updated_at': now,
+        },
+        where: 'id = ?',
+        whereArgs: [documentId],
+      );
+
+      debugPrint('DocumentService: Updated document locally to version $versionNumber');
+    } catch (e) {
+      debugPrint('DocumentService: Error updating document locally - $e');
     }
   }
 

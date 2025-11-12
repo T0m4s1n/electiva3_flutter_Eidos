@@ -152,8 +152,8 @@ class _ConversationsListState extends State<ConversationsList>
       // Batch UI updates to avoid excessive rebuilds
       if (mounted) {
         // Clear and add in one operation to minimize rebuilds
-        conversations.clear();
-        conversations.addAll(convs);
+      conversations.clear();
+      conversations.addAll(convs);
         // Only refresh once after all updates
         conversations.refresh();
       }
@@ -162,7 +162,7 @@ class _ConversationsListState extends State<ConversationsList>
     } catch (e) {
       debugPrint('Error loading conversations from local: $e');
       if (mounted) {
-        conversations.clear();
+      conversations.clear();
       }
     }
   }
@@ -349,15 +349,26 @@ class _ConversationsListState extends State<ConversationsList>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Documents.json SVG from Lottie
+          // Documents.json SVG from Lottie with colorful gradient background
           Container(
             width: 200,
             height: 200,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white.withOpacity(0.1)
-                  : Colors.transparent,
+              gradient: RadialGradient(
+                colors: isDark
+                  ? [
+                      Colors.blue[400]!.withOpacity(0.2),
+                      Colors.purple[400]!.withOpacity(0.1),
+                      Colors.transparent,
+                    ]
+                  : [
+                      Colors.blue[100]!.withOpacity(0.5),
+                      Colors.purple[100]!.withOpacity(0.3),
+                      Colors.transparent,
+                    ],
+                stops: const [0.0, 0.5, 1.0],
+              ),
               borderRadius: BorderRadius.circular(100),
             ),
             child: Lottie.asset(
@@ -391,24 +402,39 @@ class _ConversationsListState extends State<ConversationsList>
           GestureDetector(
             onTap: _startNewChat,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               decoration: BoxDecoration(
-                color: isDark ? Colors.white : Colors.black87,
+                color: Colors.black87,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              child:                   Obx(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.add_circle_outline,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Obx(
                     () => Text(
                       TranslationService.translate('start_new_chat'),
-                style: TextStyle(
+                      style: const TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.black87 : Colors.white,
+                        color: Colors.white,
                       ),
+                    ),
                 ),
+                ],
               ),
             ),
           ),
@@ -463,23 +489,53 @@ class _ConversationsListState extends State<ConversationsList>
             _deleteConversation(conversationId);
           });
         },
-        child: Container(
+            child: Container(
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                gradient: LinearGradient(
+                  colors: isDark 
+                    ? [
+                        const Color(0xFF1E1E1E),
+                        const Color(0xFF2A2A2A),
+                      ]
+                    : [
+                        Colors.white,
+                        Colors.grey[50]!,
+                      ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isDark ? Colors.grey[600]! : Colors.black87,
+                  color: Colors.black87,
+                  width: 1.5,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 4,
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
               ],
             ),
             child: ListTile(
               contentPadding: const EdgeInsets.all(16),
+              leading: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey[800] : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.black87,
+                    width: 1.5,
+                  ),
+                ),
+                child: Icon(
+                  Icons.chat_bubble_outline,
+                  color: Colors.black87,
+                  size: 24,
+                ),
+              ),
               title: Text(
                 conversation.title ?? 'Untitled Chat',
                 style: TextStyle(
@@ -494,18 +550,25 @@ class _ConversationsListState extends State<ConversationsList>
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Model chip
+                  // Model chip with gradient
                   if ((conversation.model ?? '').isNotEmpty) ...[
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
+                        horizontal: 10,
+                        vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.grey[800] : Colors.grey[200],
+                        gradient: LinearGradient(
+                          colors: isDark 
+                            ? [Colors.blue[800]!, Colors.purple[800]!]
+                            : [Colors.blue[100]!, Colors.purple[100]!],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: isDark ? Colors.grey[600]! : Colors.black87,
+                          color: isDark ? Colors.blue[400]!.withOpacity(0.3) : Colors.blue[300]!,
+                          width: 1,
                         ),
                       ),
                       child: Row(
@@ -514,7 +577,7 @@ class _ConversationsListState extends State<ConversationsList>
                           Icon(
                             Icons.memory,
                             size: 14,
-                            color: Theme.of(context).colorScheme.onSurface,
+                            color: isDark ? Colors.blue[200] : Colors.blue[700],
                           ),
                           const SizedBox(width: 6),
                           Flexible(
@@ -523,7 +586,8 @@ class _ConversationsListState extends State<ConversationsList>
                             style: TextStyle(
                               fontFamily: 'Poppins',
                               fontSize: 12,
-                              color: Theme.of(context).colorScheme.onSurface,
+                              fontWeight: FontWeight.w500,
+                              color: isDark ? Colors.blue[200] : Colors.blue[700],
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,

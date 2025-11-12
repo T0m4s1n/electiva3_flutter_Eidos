@@ -9,7 +9,6 @@ import '../widgets/animated_header.dart';
 import '../widgets/loading_screen.dart';
 import '../widgets/conversations_list.dart';
 import 'auth_page.dart';
-import 'edit_profile_page.dart';
 import 'chat_page.dart';
 import 'onboarding_page.dart';
 import '../routes/app_routes.dart';
@@ -152,8 +151,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, Single
               ),
               Column(
                 children: [
-                  // Custom animated header - only show when not in edit profile
-                  if (!navController.showEditProfile.value)
+                  // Custom animated header
                     AnimatedHeader(
                       key: _headerKey,
                       isLoggedIn: authController.isLoggedIn.value,
@@ -165,7 +163,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, Single
                           : null,
                       onLogin: () => authController.signOut(),
                       onLogout: () => authController.signOut(),
-                      onEditProfile: () => navController.showEditProfileView(),
+                      onEditProfile: () => Get.toNamed(AppRoutes.editProfile),
                       onPreferences: () => Get.toNamed(AppRoutes.preferences),
                       onToggleSearch: () {
                         _showSearchBar.value = !_showSearchBar.value;
@@ -204,7 +202,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, Single
                         );
                         
                         try {
-                          await chatController.startNewChat();
+                        await chatController.startNewChat();
                           // Close loading dialog
                           if (Get.isDialogOpen ?? false) {
                             Get.back();
@@ -237,8 +235,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, Single
 
                   // Search bar below header, above conversations list (only when showing list and search is toggled)
                   Obx(() {
-                    if (!navController.showEditProfile.value &&
-                        !navController.showChatView.value) {
+                        if (!navController.showChatView.value) {
                       return AnimatedBuilder(
                         animation: _searchAnimationController,
                         builder: (context, child) {
@@ -252,56 +249,82 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, Single
                               position: _searchSlideAnimation,
                               child: Padding(
                                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                                child: TextField(
-                                  controller: _chatSearchController,
-                                  decoration: InputDecoration(
-                                    hintText: TranslationService.translate('search_chats'),
-                                    prefixIcon: const Icon(Icons.search, size: 18),
-                                    filled: true,
-                                    fillColor: Theme.of(context).brightness == Brightness.dark
-                                        ? const Color(0xFF2C2C2C)
-                                        : Colors.white,
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide(
-                                        color: Theme.of(context).brightness == Brightness.dark
-                                            ? Colors.grey[600]!
-                                            : Colors.black87,
-                                      ),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: Theme.of(context).brightness == Brightness.dark
+                                        ? [
+                                            const Color(0xFF2C2C2C),
+                                            const Color(0xFF1E1E1E),
+                                          ]
+                                        : [
+                                            Colors.white,
+                                            Colors.grey[50]!,
+                                          ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
                                     ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide(
-                                        color: Theme.of(context).brightness == Brightness.dark
-                                            ? Colors.grey[600]!
-                                            : Colors.black87,
-                                      ),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Theme.of(context).brightness == Brightness.dark
+                                          ? Colors.grey[600]!
+                                          : Colors.grey[300]!,
                                     ),
-                                    contentPadding:
-                                        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                   ),
-                                  onSubmitted: (q) async {
-                                    final List<ConversationLocal> convs =
-                                        await ChatService.getConversations();
-                                    final String query = q.trim().toLowerCase();
-                                    ConversationLocal? match;
-                                    for (final c in convs) {
-                                      final title = (c.title ?? '').toLowerCase();
-                                      if (title.contains(query)) {
-                                        match = c;
-                                        break;
+                                  child: TextField(
+                                    controller: _chatSearchController,
+                                    onSubmitted: (q) async {
+                                      final List<ConversationLocal> convs =
+                                          await ChatService.getConversations();
+                                      final String query = q.trim().toLowerCase();
+                                      ConversationLocal? match;
+                                      for (final c in convs) {
+                                        final title = (c.title ?? '').toLowerCase();
+                                        if (title.contains(query)) {
+                                          match = c;
+                                          break;
+                                        }
                                       }
-                                    }
-                                    if (match != null) {
-                                      final chatController = Get.find<ChatController>();
-                                      await chatController.loadConversation(match.id);
-                                      navController.showChat();
-                                      final state = _headerKey.currentState;
-                                      try {
-                                        (state as dynamic).closeMenuExternal();
-                                      } catch (_) {}
-                                    }
-                                  },
+                                      if (match != null) {
+                                        final chatController = Get.find<ChatController>();
+                                        await chatController.loadConversation(match.id);
+                                        navController.showChat();
+                                        final state = _headerKey.currentState;
+                                        try {
+                                          (state as dynamic).closeMenuExternal();
+                                        } catch (_) {}
+                                      }
+                                    },
+                                    decoration: InputDecoration(
+                                      hintText: TranslationService.translate('search_chats'),
+                                      prefixIcon: Icon(
+                                        Icons.search,
+                                        size: 18,
+                                        color: Theme.of(context).brightness == Brightness.dark
+                                            ? Colors.blue[300]
+                                            : Colors.blue[600],
+                                      ),
+                                      filled: true,
+                                      fillColor: Colors.transparent,
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide(
+                                          color: Colors.blue.withOpacity(0.5),
+                                          width: 2,
+                                        ),
+                                      ),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -314,8 +337,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, Single
 
                   // Chat Archive button below search (with smooth animation)
                   Obx(() {
-                    if (!navController.showEditProfile.value &&
-                        !navController.showChatView.value) {
+                        if (!navController.showChatView.value) {
                       return AnimatedBuilder(
                         animation: _searchAnimationController,
                         builder: (context, child) {
@@ -347,24 +369,47 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, Single
                                     width: double.infinity,
                                     padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                                     decoration: BoxDecoration(
-                                      color: Theme.of(context).brightness == Brightness.dark
-                                          ? const Color(0xFF2C2C2C)
-                                          : Colors.white,
+                                      gradient: LinearGradient(
+                                        colors: Theme.of(context).brightness == Brightness.dark
+                                          ? [
+                                              const Color(0xFF2C2C2C),
+                                              const Color(0xFF1E1E1E),
+                                            ]
+                                          : [
+                                              Colors.white,
+                                              Colors.grey[50]!,
+                                            ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
                                       borderRadius: BorderRadius.circular(10),
                                       border: Border.all(
                                         color: Theme.of(context).brightness == Brightness.dark
                                             ? Colors.grey[600]!
-                                            : Colors.black87,
+                                            : Colors.grey[300]!,
                                       ),
                                     ),
                                     child: Row(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
-                                        Icon(Icons.archive_outlined, color: Theme.of(context).iconTheme.color, size: 16),
+                                        Icon(
+                                          Icons.archive_outlined,
+                                          color: Theme.of(context).brightness == Brightness.dark
+                                              ? Colors.orange[300]
+                                              : Colors.orange[600],
+                                          size: 16,
+                                        ),
                                         const SizedBox(width: 6),
                                         Obx(() => Text(
                                           TranslationService.translate('chat_archive'),
-                                          style: const TextStyle(fontFamily: 'Poppins', fontSize: 12),
+                                          style: TextStyle(
+                                            fontFamily: 'Poppins',
+                                            fontSize: 12,
+                                            color: Theme.of(context).brightness == Brightness.dark
+                                                ? Colors.orange[300]
+                                                : Colors.orange[600],
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         )),
@@ -398,17 +443,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, Single
                       children: [
                         Obx(() {
                           // Use ValueKey to prevent unnecessary rebuilds
-                      if (navController.showEditProfile.value) {
-                            return const EditProfilePage(key: ValueKey('edit_profile'));
-                      } else if (navController.showChatView.value) {
+                          if (navController.showChatView.value) {
                             return const ChatPage(key: ValueKey('chat'));
                       } else {
                             return const ConversationsList(key: ValueKey('conversations'));
                       }
                     }),
                         // Sync button in bottom right corner
-                        if (!navController.showEditProfile.value &&
-                            !navController.showChatView.value)
+                        if (!navController.showChatView.value)
                           Positioned(
                             bottom: 16,
                             right: 16,

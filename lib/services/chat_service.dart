@@ -202,6 +202,33 @@ class ChatService {
     }
   }
 
+  /// Update conversation context
+  static Future<void> updateConversationContext(
+    String conversationId,
+    String context,
+  ) async {
+    final String now = DateTime.now().toUtc().toIso8601String();
+    
+    await ChatDatabase.upsertConversation({
+      'id': conversationId,
+      'context': context,
+      'updated_at': now,
+    });
+
+    // Auto-sync if logged in and auto-sync is enabled
+    final String? userId = AuthService.currentUser?.id;
+    if (userId != null) {
+      try {
+        final bool autoSyncEnabled = await AdvancedSettingsService.isAutoSyncEnabled();
+        if (autoSyncEnabled) {
+          await _syncService.syncPending();
+        }
+      } catch (e) {
+        debugPrint('ChatService.updateConversationContext - Error syncing: $e');
+      }
+    }
+  }
+
   /// Archivar/desarchivar una conversación
   static Future<void> toggleConversationArchive(
     String conversationId,

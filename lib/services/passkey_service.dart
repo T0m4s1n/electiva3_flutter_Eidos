@@ -40,10 +40,17 @@ class PasskeyService {
     String? deviceName,
   }) async {
     try {
+      debugPrint('Starting passkey registration for user: $userId, email: $email');
+      
+      // Check device support
       if (!await isDeviceSupported()) {
+        debugPrint('Device does not support biometric authentication');
         throw Exception('Device does not support biometric authentication');
       }
 
+      debugPrint('Device supports biometrics, requesting authentication...');
+      
+      // Request biometric authentication
       final bool didAuthenticate = await _localAuth.authenticate(
         localizedReason: 'Authenticate to register a passkey for secure login',
         options: const AuthenticationOptions(
@@ -53,9 +60,13 @@ class PasskeyService {
       );
 
       if (!didAuthenticate) {
+        debugPrint('Biometric authentication was cancelled or failed');
         throw Exception('Biometric authentication failed');
       }
 
+      debugPrint('Biometric authentication successful, generating passkey...');
+
+      // Generate passkey identifiers
       final passkeyId = _uuid.v4();
       final credentialId = _uuid.v4();
       final publicKey = _generatePublicKey(userId, passkeyId);
@@ -63,28 +74,83 @@ class PasskeyService {
       final deviceInfo = _getDeviceInfo();
       final finalDeviceName = deviceName ?? deviceInfo['name'] ?? 'Unknown Device';
 
-      final response = await _supabase.from('passkeys').insert({
-        'user_id': userId,
-        'passkey_id': passkeyId,
-        'credential_id': credentialId,
-        'public_key': publicKey,
-        'device_name': finalDeviceName,
-        'device_type': deviceInfo['type'],
-        'is_active': true,
-        'created_at': DateTime.now().toIso8601String(),
-      }).select().single();
-
-      await _secureStorage.write(
-        key: 'passkey_password_$passkeyId',
-        value: password,
-      );
+      debugPrint('Generated passkey ID: $passkeyId, credential ID: $credentialId');
       
-      await _secureStorage.write(
-        key: 'passkey_email_$passkeyId',
-        value: email,
-      );
+      // Verify user exists in auth.users (this should always be true if logged in)
+      try {
+        final userCheck = await _supabase.auth.getUser();
+        if (userCheck.user == null || userCheck.user!.id != userId) {
+          debugPrint('User ID mismatch or user not found in auth');
+          throw Exception('User authentication error. Please log out and log back in.');
+        }
+        debugPrint('User verified in auth system');
+      } catch (authError) {
+        debugPrint('Error verifying user: $authError');
+        throw Exception('Authentication error. Please log out and log back in.');
+      }
+      
+      debugPrint('Inserting passkey into database...');
 
-      return response;
+      // Insert passkey into Supabase
+      try {
+        final response = await _supabase.from('passkeys').insert({
+          'user_id': userId,
+          'passkey_id': passkeyId,
+          'credential_id': credentialId,
+          'public_key': publicKey,
+          'device_name': finalDeviceName,
+          'device_type': deviceInfo['type'],
+          'is_active': true,
+          'created_at': DateTime.now().toIso8601String(),
+        }).select().single();
+
+        debugPrint('Passkey inserted successfully into database');
+
+        // Store password securely for later authentication
+        try {
+          await _secureStorage.write(
+            key: 'passkey_password_$passkeyId',
+            value: password,
+          );
+          
+          await _secureStorage.write(
+            key: 'passkey_email_$passkeyId',
+            value: email,
+          );
+          
+          debugPrint('Password and email stored securely');
+        } catch (storageError) {
+          debugPrint('Error storing password in secure storage: $storageError');
+          // If secure storage fails, try to delete the passkey from database
+          try {
+            await _supabase
+                .from('passkeys')
+                .update({'is_active': false})
+                .eq('passkey_id', passkeyId);
+          } catch (deleteError) {
+            debugPrint('Error cleaning up passkey after storage failure: $deleteError');
+          }
+          throw Exception('Failed to store passkey credentials securely');
+        }
+
+        debugPrint('Passkey registration completed successfully');
+        return response;
+      } on PostgrestException catch (e) {
+        debugPrint('Database error during passkey registration: ${e.message}');
+        debugPrint('Error code: ${e.code}, details: ${e.details}');
+        if (e.code == '23503') {
+          throw Exception('User not found. Please ensure you are logged in and your profile exists.');
+        } else if (e.code == '23505') {
+          throw Exception('A passkey with this credential already exists.');
+        } else if (e.code == '42501') {
+          throw Exception('Permission denied. Please check your account permissions.');
+        } else {
+          throw Exception('Database error: ${e.message}');
+        }
+      } catch (e) {
+        debugPrint('Unexpected error during database insert: $e');
+        rethrow;
+      }
     } catch (e) {
       debugPrint('Error registering passkey: $e');
       rethrow;
@@ -174,16 +240,31 @@ class PasskeyService {
 
   static Future<bool> hasPasskeysForEmail(String email) async {
     try {
+      debugPrint('🔍 Checking passkeys for email: $email');
+      
+      // First, check if user exists in profiles table
       final userResponse = await _supabase
           .from('profiles')
           .select('id')
           .eq('email', email)
-          .single();
+          .maybeSingle(); // Use maybeSingle to avoid error if user doesn't exist
+
+      if (userResponse == null) {
+        debugPrint('❌ User not found in profiles for email: $email');
+        return false;
+      }
 
       final userId = userResponse['id'] as String;
-      return await hasPasskeys(userId);
-    } catch (e) {
-      debugPrint('Error checking passkeys for email: $e');
+      debugPrint('✅ Found user ID: $userId for email: $email');
+      
+      // Check if user has active passkeys
+      final hasPasskeysResult = await hasPasskeys(userId);
+      debugPrint('${hasPasskeysResult ? "✅" : "❌"} User $userId has passkeys: $hasPasskeysResult');
+      
+      return hasPasskeysResult;
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error checking passkeys for email $email: $e');
+      debugPrint('Stack trace: $stackTrace');
       return false;
     }
   }

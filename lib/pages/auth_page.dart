@@ -172,17 +172,17 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                       },
                                   child: Obx(
                                     () => Text(
-                                      widget.isLogin
+                                    widget.isLogin
                                           ? TranslationService.translate('login')
                                           : TranslationService.translate('register'),
-                                      key: ValueKey(widget.isLogin),
-                                      style: const TextStyle(
-                                        fontFamily: 'Poppins',
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black87,
-                                      ),
-                                      textAlign: TextAlign.center,
+                                    key: ValueKey(widget.isLogin),
+                                    style: const TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                                    textAlign: TextAlign.center,
                                     ),
                                   ),
                                 ),
@@ -245,13 +245,13 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                               child: Obx(
                                                 () => Text(
                                                   TranslationService.translate('welcome_to_eidos'),
-                                                  style: const TextStyle(
-                                                    fontFamily: 'Poppins',
-                                                    fontSize: 20,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: Colors.black87,
-                                                  ),
-                                                  textAlign: TextAlign.center,
+                                                style: const TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 20,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.black87,
+                                                ),
+                                                textAlign: TextAlign.center,
                                                 ),
                                               ),
                                             ),
@@ -288,15 +288,15 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                               ),
                                               child: Obx(
                                                 () => Text(
-                                                  widget.isLogin
+                                                widget.isLogin
                                                       ? TranslationService.translate('sign_in')
                                                       : TranslationService.translate('sign_up'),
-                                                  style: TextStyle(
-                                                    fontFamily: 'Poppins',
-                                                    fontSize: 14,
-                                                    color: Colors.grey[600],
-                                                  ),
-                                                  textAlign: TextAlign.center,
+                                                style: TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 14,
+                                                  color: Colors.grey[600],
+                                                ),
+                                                textAlign: TextAlign.center,
                                                 ),
                                               ),
                                             ),
@@ -319,7 +319,40 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                                   _emailValidated = false;
                                                   _hasPasskey = false;
                                                   _selectedLoginMethod = null;
+                                                  _checkingPasskey = false;
                                                 });
+                                              }
+                                              
+                                              // Auto-check for passkey when email is valid (debounced)
+                                              if (value.isNotEmpty && RegExp(
+                                                r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                                              ).hasMatch(value)) {
+                                                // Debounce the check to avoid too many API calls
+                                                Future.delayed(const Duration(milliseconds: 500), () {
+                                                  if (mounted && 
+                                                      _emailController.text == value && 
+                                                      !_emailValidated &&
+                                                      RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                                                    _checkPasskeyForEmail(value.trim());
+                                                  }
+                                                });
+                                              }
+                                            } : null,
+                                            onFieldSubmitted: widget.isLogin ? (value) {
+                                              // When email is submitted, check for passkey if valid
+                                              if (value.isNotEmpty && RegExp(
+                                                r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                                              ).hasMatch(value)) {
+                                                _checkPasskeyForEmail(value.trim());
+                                              }
+                                            } : null,
+                                            onEditingComplete: widget.isLogin ? () {
+                                              // Also check when field loses focus
+                                              final email = _emailController.text.trim();
+                                              if (email.isNotEmpty && RegExp(
+                                                r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                                              ).hasMatch(email) && !_emailValidated) {
+                                                _checkPasskeyForEmail(email);
                                               }
                                             } : null,
                                             validator: (value) {
@@ -332,23 +365,27 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                               ).hasMatch(value)) {
                                                 return TranslationService.translate('email');
                                               }
-                                              // For login mode, check passkey after email is validated
-                                              if (widget.isLogin && !_emailValidated && value.isNotEmpty && RegExp(
-                                                r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                                              ).hasMatch(value)) {
-                                                Future.microtask(() {
-                                                  if (mounted) {
-                                                    _checkPasskeyForEmail(value.trim());
-                                                  }
-                                                });
-                                              }
                                               return null;
                                             },
                                           ),
 
+                                          // Show loading indicator while checking for passkey
+                                          if (widget.isLogin && _checkingPasskey) ...[
+                                            const SizedBox(height: 16),
+                                            const Center(
+                                              child: SizedBox(
+                                                width: 20,
+                                                height: 20,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+
                                           const SizedBox(height: 20),
 
-                                          // Show login method selection for login mode after email is validated
+                                          // Show login method selection for login mode after email is validated and has passkey
                                           if (widget.isLogin && _emailValidated && _hasPasskey) ...[
                                             // Choose login method (only show if user has passkey)
                                             Obx(
@@ -392,34 +429,39 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                             const SizedBox(height: 20),
                                             
                                             // Password field (only shown when password method is selected)
-                                            if (_selectedLoginMethod == 'password')
-                                              _buildTextField(
-                                                controller: _passwordController,
+                                            if (_selectedLoginMethod == 'password') ...[
+                                          _buildTextField(
+                                            controller: _passwordController,
                                                 label: TranslationService.translate('password'),
                                                 hint: TranslationService.translate('password'),
-                                                icon: Icons.lock_outline,
-                                                isPassword: true,
-                                                isPasswordVisible:
-                                                    _isPasswordVisible,
-                                                onTogglePassword: () {
-                                                  setState(() {
-                                                    _isPasswordVisible =
-                                                        !_isPasswordVisible;
-                                                  });
+                                            icon: Icons.lock_outline,
+                                            isPassword: true,
+                                            isPasswordVisible:
+                                                _isPasswordVisible,
+                                            onTogglePassword: () {
+                                              setState(() {
+                                                _isPasswordVisible =
+                                                    !_isPasswordVisible;
+                                              });
+                                            },
+                                                onChanged: (value) {
+                                                  // Force rebuild to update submit button state
+                                                  setState(() {});
                                                 },
-                                                validator: (value) {
-                                                  if (value == null ||
-                                                      value.isEmpty) {
+                                            validator: (value) {
+                                              if (value == null ||
+                                                  value.isEmpty) {
                                                     return TranslationService.translate('password');
-                                                  }
-                                                  if (value.length < 6) {
+                                              }
+                                              if (value.length < 6) {
                                                     return TranslationService.translate('password');
-                                                  }
-                                                  return null;
-                                                },
-                                              ),
-                                          ] else if (widget.isLogin) ...[
-                                            // For login without passkey or before email validation, show password field directly
+                                              }
+                                              return null;
+                                            },
+                                          ),
+                                            ],
+                                          ] else if (widget.isLogin && _emailValidated && !_hasPasskey) ...[
+                                            // For login without passkey, show password field directly after email validation
                                             _buildTextField(
                                               controller: _passwordController,
                                               label: TranslationService.translate('password'),
@@ -433,6 +475,10 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                                   _isPasswordVisible =
                                                       !_isPasswordVisible;
                                                 });
+                                              },
+                                              onChanged: (value) {
+                                                // Force rebuild to update submit button state
+                                                setState(() {});
                                               },
                                               validator: (value) {
                                                 if (value == null ||
@@ -551,20 +597,26 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                           Obx(() {
                                             final bool isLoading =
                                                 authController.isLoading.value;
-                                            // For login, check if email is valid and password is provided (for password method)
-                                            // For register, check if all fields are valid
+                                            // For login: email must be valid, and:
+                                            // - If passkey method selected: ready to submit
+                                            // - If password method selected: password must be provided and valid
+                                            // - If no passkey exists: password must be provided and valid
+                                            // For register: all fields must be valid
+                                            final String passwordText = _passwordController.text.trim();
+                                            final bool isPasswordValid = passwordText.isNotEmpty && passwordText.length >= 6;
+                                            
                                             final bool canSubmit = widget.isLogin
                                                 ? (_emailController.text.isNotEmpty &&
                                                    RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(_emailController.text) &&
-                                                   ((_selectedLoginMethod == 'passkey') || 
-                                                    (_selectedLoginMethod == 'password' && _passwordController.text.isNotEmpty && _passwordController.text.length >= 6) ||
-                                                    (_selectedLoginMethod == null && _passwordController.text.isNotEmpty && _passwordController.text.length >= 6)))
+                                                   _emailValidated &&
+                                                   ((_hasPasskey && _selectedLoginMethod == 'passkey') || 
+                                                    (_hasPasskey && _selectedLoginMethod == 'password' && isPasswordValid) ||
+                                                    (!_hasPasskey && isPasswordValid)))
                                                 : (_emailController.text.isNotEmpty &&
                                                    RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(_emailController.text) &&
-                                                   _passwordController.text.isNotEmpty && 
-                                                   _passwordController.text.length >= 6 &&
+                                                   isPasswordValid &&
                                                    _confirmPasswordController.text.isNotEmpty &&
-                                                   _confirmPasswordController.text == _passwordController.text);
+                                                   _confirmPasswordController.text.trim() == passwordText);
                                             return GestureDetector(
                                               onTap: (isLoading || !canSubmit)
                                                   ? null
@@ -618,14 +670,14 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                                               () => Text(
                                                                 TranslationService.translate('sign_in'),
                                                                 style: const TextStyle(
-                                                                  fontFamily:
-                                                                      'Poppins',
-                                                                  fontSize: 16,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                  color: Colors
-                                                                      .white,
+                                                                fontFamily:
+                                                                    'Poppins',
+                                                                fontSize: 16,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                                color: Colors
+                                                                    .white,
                                                                 ),
                                                               ),
                                                             ),
@@ -633,22 +685,22 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                                         )
                                                       : Obx(
                                                           () => Text(
-                                                            widget.isLogin
+                                                          widget.isLogin
                                                                 ? TranslationService.translate('sign_in')
                                                                 : TranslationService.translate('sign_up'),
-                                                            style:
-                                                                const TextStyle(
-                                                                  fontFamily:
-                                                                      'Poppins',
-                                                                  fontSize: 16,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                  color: Colors
-                                                                      .white,
-                                                                ),
-                                                          ),
+                                                          style:
+                                                              const TextStyle(
+                                                                fontFamily:
+                                                                    'Poppins',
+                                                                fontSize: 16,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                                color: Colors
+                                                                    .white,
+                                                              ),
                                                         ),
+                                                  ),
                                                 ),
                                               ),
                                             );
@@ -700,11 +752,11 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                                 child: Obx(
                                                   () => Text(
                                                     TranslationService.translate('forgot_password'),
-                                                    style: TextStyle(
-                                                      fontFamily: 'Poppins',
-                                                      fontSize: 14,
-                                                      fontWeight: FontWeight.w500,
-                                                      color: Colors.blue[600],
+                                                  style: TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: Colors.blue[600],
                                                     ),
                                                   ),
                                                 ),
@@ -742,6 +794,8 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
     VoidCallback? onTogglePassword,
     String? Function(String?)? validator,
     void Function(String)? onChanged,
+    void Function(String)? onFieldSubmitted,
+    VoidCallback? onEditingComplete,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -761,6 +815,8 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
           keyboardType: keyboardType,
           obscureText: isPassword && !isPasswordVisible,
           onChanged: onChanged,
+          onFieldSubmitted: onFieldSubmitted,
+          onEditingComplete: onEditingComplete,
           style: const TextStyle(fontFamily: 'Poppins', fontSize: 16),
           decoration: InputDecoration(
             hintText: hint,
@@ -819,27 +875,33 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
         return;
       }
       
-      // If email is not validated yet, check for passkey (but don't block)
+      // If email is not validated yet, check for passkey first
       if (!_emailValidated && mounted) {
-        // Try to check passkey in background, but don't wait
-        Future.microtask(() {
-          if (mounted) {
-            _checkPasskeyForEmail(_emailController.text.trim());
-          }
-        });
-        // Default to password method if not set
-        if (_selectedLoginMethod == null) {
+        await _checkPasskeyForEmail(_emailController.text.trim());
+        // After checking, if no passkey, default to password
+        if (!_hasPasskey && _selectedLoginMethod == null) {
           _selectedLoginMethod = 'password';
+        }
+        // If still not validated after check, return
+        if (!_emailValidated) {
+          return;
         }
       }
       
-      // If method is still null, default to password
-      if (_selectedLoginMethod == null) {
-        _selectedLoginMethod = 'password';
+      // If user has passkey but hasn't selected a method, show error
+      if (_hasPasskey && _selectedLoginMethod == null) {
+        Get.snackbar(
+          TranslationService.translate('error'),
+          TranslationService.translate('choose_login_method'),
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red[100],
+          colorText: Colors.red[800],
+        );
+        return;
       }
       
-      if (_selectedLoginMethod == 'password') {
-        // Validate password field
+      // If password method is selected or no passkey exists, validate password
+      if ((_selectedLoginMethod == 'password' || !_hasPasskey)) {
         if (_passwordController.text.isEmpty || _passwordController.text.length < 6) {
           Get.snackbar(
             TranslationService.translate('error'),
@@ -858,10 +920,10 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
       }
     }
     
-    final AuthController authController = Get.find<AuthController>();
+      final AuthController authController = Get.find<AuthController>();
 
-    try {
-      if (widget.isLogin) {
+      try {
+        if (widget.isLogin) {
         // Handle login based on selected method
         if (_selectedLoginMethod == 'passkey') {
           try {
@@ -944,11 +1006,11 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
             // Don't wait for sync - let it happen in background
             // This prevents blocking the UI thread
             if (mounted && widget.onLoginSuccess != null) {
-              widget.onLoginSuccess!(name, email);
+            widget.onLoginSuccess!(name, email);
             }
           }
-        }
-      } else {
+          }
+        } else {
           // Handle registration
           final response = await authController.signUp(
             email: _emailController.text.trim(),
@@ -985,7 +1047,7 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
 
             // Automatically sign in the user
             if (mounted && widget.onLoginSuccess != null) {
-              widget.onLoginSuccess!(name, email);
+            widget.onLoginSuccess!(name, email);
             }
           }
         }
@@ -1015,33 +1077,48 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
           });
         }
       }
-  }
+    }
 
   Future<void> _checkPasskeyForEmail(String email) async {
-    if (_checkingPasskey || !mounted) return;
+    // Prevent duplicate checks
+    if (_checkingPasskey || !mounted || email.isEmpty) return;
+    
+    // Validate email format first
+    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+      return;
+    }
+    
+    debugPrint('🔍 Checking for passkey for email: $email');
     
     if (mounted) {
       setState(() {
         _checkingPasskey = true;
       });
     }
-    
+
     try {
       // Check if user exists and has passkey
+      debugPrint('📧 Calling hasPasskeysForEmail for: $email');
       final hasPasskey = await passkey.PasskeyService.hasPasskeysForEmail(email);
+      debugPrint('✅ Passkey check result for $email: $hasPasskey');
+      
       if (mounted) {
         setState(() {
           _emailValidated = true;
           _hasPasskey = hasPasskey;
-          // If user has passkey, don't auto-select method
+          // If user has passkey, don't auto-select method (let user choose)
           // If no passkey, default to password
           if (!hasPasskey) {
             _selectedLoginMethod = 'password';
           }
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error checking passkey for $email: $e');
+      debugPrint('Stack trace: $stackTrace');
+      
       // If error checking, assume no passkey and default to password
+      // This could be because user doesn't exist or has no passkey
       if (mounted) {
         setState(() {
           _emailValidated = true;
@@ -1152,25 +1229,25 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                   () => Text(
                     TranslationService.translate('success'),
                     style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                    textAlign: TextAlign.center,
+                    fontFamily: 'Poppins',
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                  textAlign: TextAlign.center,
                   ),
                 ),
                 const SizedBox(height: 12),
                 Obx(
                   () => Text(
                     TranslationService.translate('forgot_password'),
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 14,
-                      color: Colors.grey[700],
-                      height: 1.5,
-                    ),
-                    textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 14,
+                    color: Colors.grey[700],
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -1188,12 +1265,12 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                       () => Text(
                         TranslationService.translate('close'),
                         style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                        textAlign: TextAlign.center,
+                        fontFamily: 'Poppins',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                      textAlign: TextAlign.center,
                       ),
                     ),
                   ),
@@ -1388,12 +1465,12 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                           () => Text(
                             TranslationService.translate('close'),
                             style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                            textAlign: TextAlign.center,
+                            fontFamily: 'Poppins',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                          textAlign: TextAlign.center,
                           ),
                         ),
                       ),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
-import '../controllers/navigation_controller.dart';
 import '../widgets/edit_profile_view.dart';
 
 class EditProfilePage extends StatelessWidget {
@@ -10,18 +9,17 @@ class EditProfilePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AuthController authController = Get.find<AuthController>();
-    final NavigationController navController = Get.find<NavigationController>();
 
     return Obx(() {
       return EditProfileView(
         currentName: authController.userName.value,
         currentEmail: authController.userEmail.value,
-        onBack: () => navController.hideEditProfileView(),
+        onBack: () => Get.back(),
         onSaveProfile: (name, email, bio) async {
           try {
             await authController.updateUserProfile(fullName: name);
 
-            navController.hideEditProfileView();
+            Get.back();
 
             Get.snackbar(
               'Success',
@@ -46,7 +44,8 @@ class EditProfilePage extends StatelessWidget {
           try {
             await authController.deleteAccount();
 
-            navController.resetAllViews();
+            // Navigate to home and clear navigation stack
+            Get.offAllNamed('/');
 
             Get.snackbar(
               'Account Deleted',
