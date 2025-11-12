@@ -142,7 +142,7 @@ class PreferencesPage extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      _buildMoreCard(context),
+                      _buildMoreCard(context, preferencesController),
                     ],
                   ),
                 ),
@@ -156,7 +156,7 @@ class PreferencesPage extends StatelessWidget {
     );
   }
 
-  Widget _buildMoreCard(BuildContext context) {
+  Widget _buildMoreCard(BuildContext context, PreferencesController preferencesController) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(20),
@@ -177,15 +177,7 @@ class PreferencesPage extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Obx(
-            () => _buildNavTile(
-              context,
-              icon: Icons.folder_copy_outlined,
-              title: TranslationService.translate('documents'),
-              subtitle: 'Manage your documents',
-              route: AppRoutes.documents,
-            ),
-          ),
+          _buildDocumentCreationConfig(context, preferencesController),
           const Divider(height: 24),
           Obx(
             () => _buildNavTile(
@@ -1152,7 +1144,7 @@ class PreferencesPage extends StatelessWidget {
                 color: Theme.of(context).colorScheme.onSurface,
               ),
               items: const [
-                // OpenAI GPT Models
+                // OpenAI GPT Models (Functional)
                 DropdownMenuItem<String>(
                   value: 'gpt-4o-mini',
                   child: Text('GPT-4o Mini (Current)'),
@@ -1174,93 +1166,12 @@ class PreferencesPage extends StatelessWidget {
                   child: Text('GPT-3.5 Turbo'),
                 ),
                 DropdownMenuItem<String>(
-                  value: 'gpt-5',
-                  child: Text('GPT-5 (Preview)'),
-                ),
-                // Anthropic Claude Models
-                DropdownMenuItem<String>(
-                  value: 'claude-3-5-sonnet-20241022',
-                  child: Text('Claude 3.5 Sonnet'),
-                ),
-                DropdownMenuItem<String>(
-                  value: 'claude-3-opus-20240229',
-                  child: Text('Claude 3 Opus'),
-                ),
-                DropdownMenuItem<String>(
-                  value: 'claude-3-sonnet-20240229',
-                  child: Text('Claude 3 Sonnet'),
-                ),
-                DropdownMenuItem<String>(
-                  value: 'claude-3-haiku-20240307',
-                  child: Text('Claude 3 Haiku'),
-                ),
-                DropdownMenuItem<String>(
-                  value: 'claude-3-5-haiku',
-                  child: Text('Claude 3.5 Haiku'),
-                ),
-                // Google Gemini Models
-                DropdownMenuItem<String>(
-                  value: 'gemini-pro',
-                  child: Text('Gemini Pro'),
-                ),
-                DropdownMenuItem<String>(
-                  value: 'gemini-ultra',
-                  child: Text('Gemini Ultra'),
-                ),
-                DropdownMenuItem<String>(
-                  value: 'gemini-flash',
-                  child: Text('Gemini Flash'),
-                ),
-                DropdownMenuItem<String>(
-                  value: 'gemini-1.5-pro',
-                  child: Text('Gemini 1.5 Pro'),
-                ),
-                DropdownMenuItem<String>(
-                  value: 'gemini-1.5-flash',
-                  child: Text('Gemini 1.5 Flash'),
-                ),
-                // Meta Llama Models
-                DropdownMenuItem<String>(
-                  value: 'llama-3-70b',
-                  child: Text('Llama 3 70B'),
-                ),
-                DropdownMenuItem<String>(
-                  value: 'llama-3-8b',
-                  child: Text('Llama 3 8B'),
-                ),
-                DropdownMenuItem<String>(
-                  value: 'llama-2-70b',
-                  child: Text('Llama 2 70B'),
-                ),
-                // Mistral AI Models
-                DropdownMenuItem<String>(
-                  value: 'mistral-large',
-                  child: Text('Mistral Large'),
-                ),
-                DropdownMenuItem<String>(
-                  value: 'mistral-medium',
-                  child: Text('Mistral Medium'),
-                ),
-                DropdownMenuItem<String>(
-                  value: 'mistral-small',
-                  child: Text('Mistral Small'),
-                ),
-                // Other Models
-                DropdownMenuItem<String>(
                   value: 'o1-preview',
                   child: Text('O1 Preview'),
                 ),
                 DropdownMenuItem<String>(
                   value: 'o1-mini',
                   child: Text('O1 Mini'),
-                ),
-                DropdownMenuItem<String>(
-                  value: 'grok-beta',
-                  child: Text('Grok Beta'),
-                ),
-                DropdownMenuItem<String>(
-                  value: 'pi-4',
-                  child: Text('Pi 4'),
                 ),
               ],
               onChanged: (String? value) {
@@ -1889,6 +1800,201 @@ class PreferencesPage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDocumentCreationConfig(
+    BuildContext context,
+    PreferencesController preferencesController,
+  ) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.folder_copy_outlined,
+              color: Theme.of(context).colorScheme.primary,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                TranslationService.translate('documents'),
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Configure document creation settings',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 14,
+            color: isDark ? Colors.grey[400] : Colors.grey[600],
+          ),
+        ),
+        const SizedBox(height: 16),
+        
+        // Auto-save documents
+        Obx(
+          () => Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Auto-save Documents',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Automatically save documents as you edit',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        color: isDark ? Colors.grey[500] : Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: preferencesController.autoSaveDocuments.value,
+                onChanged: (value) {
+                  preferencesController.setAutoSaveDocuments(value);
+                },
+                activeThumbColor: Theme.of(context).colorScheme.primary,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        
+        // Auto-create versions
+        Obx(
+          () => Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Auto-create Versions',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Create version history when saving',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        color: isDark ? Colors.grey[500] : Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: preferencesController.autoCreateVersions.value,
+                onChanged: (value) {
+                  preferencesController.setAutoCreateVersions(value);
+                },
+                activeThumbColor: Theme.of(context).colorScheme.primary,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        
+        // Default document format
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Default Document Format',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Obx(
+              () => DropdownButtonFormField<String>(
+                value: preferencesController.defaultDocumentFormat.value,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                      color: isDark ? Colors.grey[600]! : Colors.black87,
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                      color: isDark ? Colors.grey[600]! : Colors.black87,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 2,
+                    ),
+                  ),
+                  filled: true,
+                  fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                dropdownColor: Theme.of(context).cardTheme.color,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                items: const [
+                  DropdownMenuItem<String>(
+                    value: 'markdown',
+                    child: Text('Markdown'),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: 'plain',
+                    child: Text('Plain Text'),
+                  ),
+                ],
+                onChanged: (String? value) {
+                  if (value != null) {
+                    preferencesController.setDefaultDocumentFormat(value);
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

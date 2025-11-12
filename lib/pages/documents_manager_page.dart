@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sqflite/sqflite.dart';
-import '../services/chat_database.dart';
+import '../services/document_service.dart';
 import '../widgets/document_editor.dart';
 import '../widgets/animated_icon_background.dart';
 
@@ -12,7 +11,7 @@ class DocumentsManagerPage extends StatefulWidget {
 }
 
 class _DocumentsManagerPageState extends State<DocumentsManagerPage> {
-  List<Map<String, Object?>> _docs = [];
+  List<Map<String, dynamic>> _docs = [];
   bool _loading = true;
 
   @override
@@ -22,14 +21,15 @@ class _DocumentsManagerPageState extends State<DocumentsManagerPage> {
   }
 
   Future<void> _loadDocuments() async {
+    setState(() => _loading = true);
     try {
-      final Database db = await ChatDatabase.instance;
-      final results = await db.query('documents', orderBy: 'updated_at DESC');
+      final documents = await DocumentService.getAllDocuments();
       setState(() {
-        _docs = results;
+        _docs = documents;
         _loading = false;
       });
     } catch (e) {
+      debugPrint('Error loading documents: $e');
       setState(() => _loading = false);
     }
   }
@@ -70,38 +70,79 @@ class _DocumentsManagerPageState extends State<DocumentsManagerPage> {
             ListView.separated(
               padding: const EdgeInsets.all(16),
               itemBuilder: (context, index) {
-                    final doc = _docs[index];
-                    final title = (doc['title'] as String?) ?? 'Untitled';
-                    final updatedAt = (doc['updated_at'] as String?) ?? '';
-                    final content = (doc['content'] as String?) ?? '';
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).cardTheme.color,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: isDark ? Colors.grey[600]! : Colors.black87),
+                final doc = _docs[index];
+                final title = (doc['title'] as String?) ?? 'Untitled';
+                final updatedAt = (doc['updated_at'] as String?) ?? '';
+                final content = (doc['content'] as String?) ?? '';
+                final docId = (doc['id'] as String?) ?? '';
+                
+                // Format the date for display
+                String formattedDate = '';
+                try {
+                  if (updatedAt.isNotEmpty) {
+                    final date = DateTime.parse(updatedAt);
+                    formattedDate = '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+                  }
+                } catch (e) {
+                  formattedDate = updatedAt;
+                }
+                
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardTheme.color,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: isDark ? Colors.grey[600]! : Colors.black87),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.all(16),
+                    title: Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w600,
                       ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(16),
-                        title: Text(title, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
-                        subtitle: Text(
-                          updatedAt,
-                          style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: isDark ? Colors.grey[500] : Colors.grey[600]),
-                        ),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => DocumentEditor(
-                                documentTitle: title,
-                                documentContent: content,
-                                documentId: doc['id'] as String?,
-                              ),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (formattedDate.isNotEmpty)
+                          Text(
+                            formattedDate,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              color: isDark ? Colors.grey[500] : Colors.grey[600],
                             ),
-                          );
-                        },
-                      ),
-                    );
-                  },
+                          ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${content.length} characters',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            color: isDark ? Colors.grey[600] : Colors.grey[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => DocumentEditor(
+                            documentTitle: title,
+                            documentContent: content,
+                            documentId: docId.isNotEmpty ? docId : null,
+                          ),
+                        ),
+                      ).then((_) {
+                        // Reload documents when returning from editor
+                        _loadDocuments();
+                      });
+                    },
+                  ),
+                );
+              },
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemCount: _docs.length,
             ),

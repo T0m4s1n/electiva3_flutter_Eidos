@@ -30,6 +30,11 @@ class PreferencesController extends GetxController {
   final RxBool isDarkMode = false.obs;
   final RxList<ChatRule> chatRules = <ChatRule>[].obs;
   final RxString model = 'gpt-4o-mini'.obs;
+  
+  // Document creation preferences
+  final RxBool autoSaveDocuments = true.obs;
+  final RxBool autoCreateVersions = true.obs;
+  final RxString defaultDocumentFormat = 'markdown'.obs;
 
   @override
   void onInit() {
@@ -51,6 +56,11 @@ class PreferencesController extends GetxController {
 
       // Load chat rules
       chatRules.value = HiveStorageService.getAllChatRules();
+
+      // Load document creation preferences
+      autoSaveDocuments.value = HiveStorageService.loadAutoSaveDocuments();
+      autoCreateVersions.value = HiveStorageService.loadAutoCreateVersions();
+      defaultDocumentFormat.value = HiveStorageService.loadDefaultDocumentFormat();
 
       debugPrint('Preferences loaded successfully');
       debugPrint('AI Personality: ${aiPersonality.value.displayName}');
@@ -220,4 +230,39 @@ class PreferencesController extends GetxController {
 
   /// Get rules-only prompt for display purposes
   String get rulesOnlyPrompt => HiveStorageService.generateRulesPrompt();
+
+  // ========== DOCUMENT CREATION PREFERENCES ==========
+
+  /// Save auto-save documents preference
+  Future<void> setAutoSaveDocuments(bool autoSave) async {
+    try {
+      autoSaveDocuments.value = autoSave;
+      await HiveStorageService.saveAutoSaveDocuments(autoSave);
+      debugPrint('Auto-save documents updated: $autoSave');
+    } catch (e) {
+      debugPrint('Error saving auto-save documents preference: $e');
+    }
+  }
+
+  /// Save auto-create versions preference
+  Future<void> setAutoCreateVersions(bool autoCreate) async {
+    try {
+      autoCreateVersions.value = autoCreate;
+      await HiveStorageService.saveAutoCreateVersions(autoCreate);
+      debugPrint('Auto-create versions updated: $autoCreate');
+    } catch (e) {
+      debugPrint('Error saving auto-create versions preference: $e');
+    }
+  }
+
+  /// Save default document format preference
+  Future<void> setDefaultDocumentFormat(String format) async {
+    try {
+      defaultDocumentFormat.value = format;
+      await HiveStorageService.saveDefaultDocumentFormat(format);
+      debugPrint('Default document format updated: $format');
+    } catch (e) {
+      debugPrint('Error saving default document format: $e');
+    }
+  }
 }

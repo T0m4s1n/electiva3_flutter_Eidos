@@ -20,6 +20,9 @@ class HiveStorageService {
   static const String _topPKey = 'top_p';
   static const String _maxTokensScopeKey = 'max_tokens_scope';
   static const String _languageKey = 'language';
+  static const String _autoSaveDocumentsKey = 'auto_save_documents';
+  static const String _autoCreateVersionsKey = 'auto_create_versions';
+  static const String _defaultDocumentFormatKey = 'default_document_format';
 
   /// Initialize Hive storage
   static Future<void> init() async {
@@ -395,6 +398,71 @@ class HiveStorageService {
     } catch (e) {
       debugPrint('Error generating rules prompt: $e');
       return '';
+    }
+  }
+
+  // ========== DOCUMENT CREATION PREFERENCES ==========
+
+  /// Save auto-save documents preference
+  static Future<void> saveAutoSaveDocuments(bool autoSave) async {
+    try {
+      await _preferencesBox?.put(_autoSaveDocumentsKey, autoSave);
+      debugPrint('Auto-save documents preference saved: $autoSave');
+    } catch (e) {
+      debugPrint('Error saving auto-save documents preference: $e');
+      rethrow;
+    }
+  }
+
+  /// Load auto-save documents preference
+  static bool loadAutoSaveDocuments() {
+    try {
+      return _preferencesBox?.get(_autoSaveDocumentsKey, defaultValue: true) ?? true;
+    } catch (e) {
+      debugPrint('Error loading auto-save documents preference: $e');
+      return true;
+    }
+  }
+
+  /// Save auto-create versions preference
+  static Future<void> saveAutoCreateVersions(bool autoCreate) async {
+    try {
+      await _preferencesBox?.put(_autoCreateVersionsKey, autoCreate);
+      debugPrint('Auto-create versions preference saved: $autoCreate');
+    } catch (e) {
+      debugPrint('Error saving auto-create versions preference: $e');
+      rethrow;
+    }
+  }
+
+  /// Load auto-create versions preference
+  static bool loadAutoCreateVersions() {
+    try {
+      return _preferencesBox?.get(_autoCreateVersionsKey, defaultValue: true) ?? true;
+    } catch (e) {
+      debugPrint('Error loading auto-create versions preference: $e');
+      return true;
+    }
+  }
+
+  /// Save default document format preference
+  static Future<void> saveDefaultDocumentFormat(String format) async {
+    try {
+      await _preferencesBox?.put(_defaultDocumentFormatKey, format);
+      debugPrint('Default document format saved: $format');
+    } catch (e) {
+      debugPrint('Error saving default document format: $e');
+      rethrow;
+    }
+  }
+
+  /// Load default document format preference
+  static String loadDefaultDocumentFormat() {
+    try {
+      return _preferencesBox?.get(_defaultDocumentFormatKey, defaultValue: 'markdown') ?? 'markdown';
+    } catch (e) {
+      debugPrint('Error loading default document format: $e');
+      return 'markdown';
     }
   }
 }

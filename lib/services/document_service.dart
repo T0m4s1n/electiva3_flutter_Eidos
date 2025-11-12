@@ -365,6 +365,99 @@ class DocumentService {
     return results.map((row) => row as Map<String, dynamic>).toList();
   }
 
+  /// Get all documents for the current user
+  static Future<List<Map<String, dynamic>>> getAllDocuments() async {
+    try {
+      final String? userId = AuthService.currentUser?.id;
+
+      if (userId == null) {
+        return await _getAllDocumentsLocally();
+      }
+
+      // Try to get from Supabase first
+      try {
+        final response = await _supabase
+            .from('documents')
+            .select()
+            .eq('user_id', userId)
+            .eq('is_current_version', true)
+            .order('updated_at', ascending: false);
+
+        final supabaseDocs = List<Map<String, dynamic>>.from(response);
+        
+        // Also get local documents
+        final localDocs = await _getAllDocumentsLocally();
+        
+        // Merge documents, avoiding duplicates (prefer Supabase if both exist)
+        final Map<String, Map<String, dynamic>> docMap = {};
+        
+        // Add local documents first
+        for (final doc in localDocs) {
+          final docId = doc['id'] as String? ?? '';
+          if (docId.isNotEmpty) {
+            docMap[docId] = doc;
+          }
+        }
+        
+        // Override with Supabase documents if they exist
+        for (final doc in supabaseDocs) {
+          final docId = doc['id'] as String? ?? '';
+          if (docId.isNotEmpty) {
+            docMap[docId] = doc;
+          }
+        }
+
+        // Convert back to list and sort
+        final mergedDocs = docMap.values.toList()
+          ..sort((a, b) {
+            final aDate = a['updated_at'] as String? ?? '';
+            final bDate = b['updated_at'] as String? ?? '';
+            return bDate.compareTo(aDate); // Descending order
+          });
+
+        return mergedDocs;
+      } catch (e) {
+        debugPrint('DocumentService: Error getting documents from Supabase - $e');
+        return await _getAllDocumentsLocally();
+      }
+    } catch (e) {
+      debugPrint('DocumentService: Error getting all documents - $e');
+      return await _getAllDocumentsLocally();
+    }
+  }
+
+  /// Get all documents from local SQLite
+  static Future<List<Map<String, dynamic>>> _getAllDocumentsLocally() async {
+    try {
+      final Database db = await ChatDatabase.instance;
+      final String? userId = AuthService.currentUser?.id;
+      
+      // Get all documents for the current user, or all documents if no user
+      final List<Map<String, Object?>> results;
+      if (userId != null && userId.isNotEmpty) {
+        results = await db.query(
+          'documents',
+          where: 'user_id = ? AND is_current_version = ?',
+          whereArgs: [userId, 1],
+          orderBy: 'updated_at DESC',
+        );
+      } else {
+        // If no user, get all documents (for offline mode)
+        results = await db.query(
+          'documents',
+          where: 'is_current_version = ?',
+          whereArgs: [1],
+          orderBy: 'updated_at DESC',
+        );
+      }
+
+      return results.map((row) => row as Map<String, dynamic>).toList();
+    } catch (e) {
+      debugPrint('DocumentService: Error getting all documents locally - $e');
+      return [];
+    }
+  }
+
   /// Get document versions (from both Supabase and local storage)
   static Future<List<Map<String, dynamic>>> getDocumentVersions(
     String documentId,
