@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import '../services/chat_service.dart';
@@ -32,6 +33,13 @@ class ChatController extends GetxController {
   // Text controller for input
   final TextEditingController messageController = TextEditingController();
   final ScrollController scrollController = ScrollController();
+
+  // Cancel token for stopping generation
+  HttpClientRequest? _currentRequest;
+  HttpClient? _currentHttpClient;
+  StreamSubscription<String>? _currentStreamSubscription;
+  bool _isStopped = false;
+  Completer<String>? _currentGenerationCompleter;
 
   // OpenAI API key
   String? get openaiKey => dotenv.env['OPENAI_KEY'];
@@ -224,38 +232,162 @@ class ChatController extends GetxController {
     return false;
   }
 
-  /// Check if message contains document-related keywords
-  /// Used to skip reminder detection when document keywords are present
-  bool _hasDocumentKeywords(String messageText) {
+
+  /// Check if message contains reminder keywords
+  bool _hasReminderKeywords(String messageText) {
     final String lowerMessage = messageText.toLowerCase();
-
-    final List<String> documentKeywords = [
-      'document',
-      'text',
-      'write',
-      'create',
-      'draft',
-      'compose',
-      'generate',
-      'redact',
-      'documento',
-      'texto',
-      'escribir',
-      'crear',
-      'redactar',
-      'componer',
-      'generar',
+    final List<String> reminderKeywords = [
+      'reminder', 'remind me', 'set a reminder', 'create a reminder',
+      'add a reminder', 'schedule a reminder', 'recordatorio', 'recordar',
+      'agregar recordatorio', 'crear recordatorio', 'haz un recordatorio',
+      'hazme un recordatorio', 'recuérdame', 'recuerda',
     ];
+    return reminderKeywords.any((keyword) => lowerMessage.contains(keyword));
+  }
 
-    // Check if document keywords appear with high priority (near the start of the message)
-    // This helps distinguish "create a document" from "remind me to create..."
-    final bool hasPriorityKeywords = documentKeywords.any((keyword) {
+  /// Check if reminder is related to current chat/document context
+  bool _isReminderRelatedToContext(String messageText) {
+    final String lowerMessage = messageText.toLowerCase();
+    
+    // Keywords that indicate the reminder is related to current context
+    final List<String> contextKeywords = [
+      // Document-related
+      'documento', 'document', 'texto', 'text', 'escrito', 'escrit',
+      'este documento', 'this document', 'el documento', 'the document',
+      'revisar documento', 'review document', 'continuar documento', 'continue document',
+      'trabajar en documento', 'work on document', 'editar documento', 'edit document',
+      'editar ese documento', 'edit that document', 'editar el documento', 'edit the document',
+      'ese documento', 'that document', 'el mismo documento', 'the same document',
+      // Chat-related
+      'esta conversación', 'this conversation', 'esta charla', 'this chat',
+      'continuar conversación', 'continue conversation', 'revisar conversación', 'review conversation',
+      // Generic context
+      'esto', 'this', 'esté', 'este', 'esta', 'these', 'estos', 'estas',
+      'ese', 'esa', 'eso', 'that', 'those',
+      'aquí', 'here', 'ahora', 'now', 'continuar', 'continue', 'seguir', 'follow',
+      'revisar', 'review', 'revisar esto', 'review this',
+    ];
+    
+    // Check if message contains context keywords
+    final bool hasContextKeywords = contextKeywords.any((keyword) => lowerMessage.contains(keyword));
+    
+    // If in document mode or has a document, check for document-specific keywords
+    if (isDocumentMode.value || currentDocumentId.value != null) {
+      final List<String> documentContextKeywords = [
+        'documento', 'document', 'texto', 'text', 'escrito',
+        'revisar', 'review', 'continuar', 'continue', 'editar', 'edit',
+        'trabajar', 'work', 'mejorar', 'improve', 'actualizar', 'update',
+        'ese', 'esa', 'eso', 'that', 'el mismo', 'the same',
+      ];
+      final bool hasDocumentContext = documentContextKeywords.any((keyword) => lowerMessage.contains(keyword));
+      
+      // If has document context or context keywords, it's related
+      // Also, if we're in document mode and the message mentions "editar" or "edit", it's definitely related
+      final bool isEditRequest = lowerMessage.contains('editar') || lowerMessage.contains('edit');
+      if (isEditRequest && (isDocumentMode.value || currentDocumentId.value != null)) {
+        return true;
+      }
+      
+      return hasDocumentContext || hasContextKeywords;
+    }
+    
+    // If has context keywords, it's related to the chat
+    if (hasContextKeywords) {
+      return true;
+    }
+    
+    // Check if the reminder title is very generic (likely not related)
+    // Extract title to check if it's too generic
+    final List<String> reminderKeywords = [
+      'reminder', 'remind me', 'set a reminder', 'create a reminder',
+      'add a reminder', 'schedule a reminder', 'recordatorio', 'recordar',
+      'agregar recordatorio', 'crear recordatorio', 'haz un recordatorio',
+    ];
+    
+    String title = messageText;
+    for (final keyword in reminderKeywords) {
       final index = lowerMessage.indexOf(keyword);
-      // If keyword appears in first 30 characters, it's likely a document request
-      return index != -1 && index < 30;
-    });
+      if (index != -1) {
+        title = messageText.substring(index + keyword.length).trim();
+        break;
+      }
+    }
+    
+    // Remove time/date words
+    title = title.replaceAll(RegExp(r'\b(tomorrow|today|now|in|at|on|en|mañana|hoy|ahora)\b', caseSensitive: false), '').trim();
+    title = title.replaceAll(RegExp(r'\d{1,2}:\d{2}'), '').trim();
+    title = title.replaceAll(RegExp(r'\d{1,2}/\d{1,2}/\d{4}'), '').trim();
+    title = title.replaceAll(RegExp(r'\d+\s+(minuto|minutos|minutes?|hora|horas|hours?|día|días|days?)'), '').trim();
+    
+    // If title is empty or too short after cleanup, it's likely not related
+    if (title.isEmpty || title.length < 10) {
+      return false;
+    }
+    
+    // If title doesn't contain any context or document keywords, it's not related
+    final String lowerTitle = title.toLowerCase();
+    final bool titleHasContext = contextKeywords.any((keyword) => lowerTitle.contains(keyword));
+    final bool titleHasDocumentKeywords = ['documento', 'document', 'texto', 'text', 'escrito', 'escrit', 'chat', 'conversación'].any((keyword) => lowerTitle.contains(keyword));
+    
+    // If title has context or document keywords, it's related
+    return titleHasContext || titleHasDocumentKeywords;
+  }
 
-    return hasPriorityKeywords;
+  /// Check if message is requesting to edit an existing document (not create new)
+  bool _isEditingExistingDocument(String messageText) {
+    final String lowerMessage = messageText.toLowerCase();
+    
+    // Keywords that indicate editing an existing document
+    final List<String> editKeywords = [
+      'editar', 'edit', 'modificar', 'modify', 'actualizar', 'update',
+      'revisar', 'review', 'mejorar', 'improve', 'cambiar', 'change',
+      'ese documento', 'that document', 'el documento', 'the document',
+      'este documento', 'this document', 'el mismo documento', 'the same document',
+    ];
+    
+    // If in document mode or has a document, and message contains edit keywords
+    if ((isDocumentMode.value || currentDocumentId.value != null) &&
+        editKeywords.any((keyword) => lowerMessage.contains(keyword))) {
+      return true;
+    }
+    
+    return false;
+  }
+
+  /// Get suggested reminder message based on current context
+  String? _getSuggestedReminderMessage() {
+    if (isDocumentMode.value || currentDocumentId.value != null) {
+      return '''💡 Sugerencia de recordatorio:
+
+Parece que quieres crear un recordatorio que no está relacionado con el documento actual.
+
+¿Te gustaría crear un recordatorio para revisar o continuar trabajando en este documento?
+
+Ejemplos:
+- "Haz un recordatorio para revisar este documento en 1 hora"
+- "Recuérdame continuar con el documento mañana"
+- "Crea un recordatorio para editar el documento el lunes"''';
+    } else if (hasMessages.value) {
+      return '''💡 Sugerencia de recordatorio:
+
+Parece que quieres crear un recordatorio que no está relacionado con esta conversación.
+
+¿Te gustaría:
+- Crear un recordatorio relacionado con esta conversación (ej: "Recuérdame continuar esta conversación mañana")
+- Crear un documento y luego un recordatorio sobre él (ej: "Haz un recordatorio para crear un documento mañana")
+
+Ejemplos:
+- "Haz un recordatorio para continuar esta conversación en 2 horas"
+- "Crea un recordatorio para hacer un documento sobre [tema] mañana"''';
+    } else {
+      return '''💡 Sugerencia de recordatorio:
+
+Parece que quieres crear un recordatorio, pero no está claro sobre qué.
+
+¿Te gustaría crear un recordatorio para crear un documento?
+
+Ejemplo: "Haz un recordatorio para crear un documento sobre [tema] en 1 hora"''';
+    }
   }
 
   /// Send a message to the chat
@@ -269,84 +401,85 @@ class ChatController extends GetxController {
       // Clear input
       messageController.clear();
 
-      // PRIORITY 1: Check if message is requesting document creation
-      // This must be checked FIRST to avoid reminder detection interfering
-      final bool isDocumentRequest = _isDocumentRequest(messageText);
+      // Add user message to the chat first (needed for both reminders and documents)
+      final MessageLocal userMessage = await ChatService.createUserMessage(
+        conversationId: currentConversationId.value,
+        text: messageText,
+      );
 
-      // Check if we're in document mode OR if this is a document request
-      if (isDocumentMode.value || isDocumentRequest) {
-        // If not already in document mode, activate it
-        if (!isDocumentMode.value) {
-          debugPrint('Document mode activated from message: $messageText');
-          isDocumentMode.value = true;
-        }
+      // Verify the message was saved to database
+      await Future.delayed(
+        const Duration(milliseconds: 200),
+      ); // Give time for DB to save
+      final List<MessageLocal> verifyMessages = await ChatService.getMessages(
+        currentConversationId.value,
+      );
+      final int userMsgCount = verifyMessages
+          .where((m) => m.role == 'user')
+          .length;
+      debugPrint(
+        'Verification: Found ${verifyMessages.length} total messages in database',
+      );
+      debugPrint(
+        'Verification: Found $userMsgCount user messages in database',
+      );
 
-        // Update conversation title if this is the first message
-        final List<MessageLocal> existingMessages = await ChatService.getMessages(
-          currentConversationId.value,
-        );
-        if (existingMessages.isEmpty || existingMessages.every((m) => m.role == 'system')) {
-          await _updateConversationTitle(messageText);
-        }
+      messages.add(userMessage);
+      hasMessages.value = true;
 
-        // In document mode, generate document with checklist
-        // Skip reminder detection entirely when in document mode
-        await generateDocumentWithChecklist(messageText);
-        return; // Exit early - don't process as regular chat
+      debugPrint(
+        'Added user message to observable list. Total messages: ${messages.length}',
+      );
+
+      // Update conversation title and generate context if it's the first message
+      if (messages.length == 1) {
+        await _updateConversationTitle(messageText);
+        // Generate and save context for personalized AI responses
+        await _generateAndSaveContext(messageText);
       }
 
-      // Regular chat mode (NOT document mode)
-        // Add user message to the chat
+      // Scroll to bottom
+      _scrollToBottom();
 
-        final MessageLocal userMessage = await ChatService.createUserMessage(
-          conversationId: currentConversationId.value,
-          text: messageText,
-        );
+      // PRIORITY 1: Check for reminder request FIRST
+      // This has higher priority than document creation
+      // Allow reminders even in document mode or when document keywords are present
+      final bool hasReminderKeywords = _hasReminderKeywords(messageText);
+      if (hasReminderKeywords) {
+        // Check if reminder is related to chat/document context
+        final bool isReminderRelated = _isReminderRelatedToContext(messageText);
+        
+        if (!isReminderRelated) {
+          // Reminder is not related to current context - show suggestion
+          final String? suggestedReminder = _getSuggestedReminderMessage();
+          
+          final MessageLocal suggestionMessage = await ChatService.createAssistantMessage(
+            conversationId: currentConversationId.value,
+            text: suggestedReminder ?? '''💡 Sugerencia de recordatorio:
 
-        // Verify the message was saved to database
-        await Future.delayed(
-          const Duration(milliseconds: 200),
-        ); // Give time for DB to save
-        final List<MessageLocal> verifyMessages = await ChatService.getMessages(
-          currentConversationId.value,
-        );
-        final int userMsgCount = verifyMessages
-            .where((m) => m.role == 'user')
-            .length;
-        debugPrint(
-          'Verification: Found ${verifyMessages.length} total messages in database',
-        );
-        debugPrint(
-          'Verification: Found $userMsgCount user messages in database',
-        );
+Parece que quieres crear un recordatorio, pero no está relacionado con esta conversación o documento.
 
-        messages.add(userMessage);
-        hasMessages.value = true;
+¿Te gustaría crear un recordatorio para:
+- ${isDocumentMode.value || currentDocumentId.value != null 
+    ? 'Revisar o continuar trabajando en el documento actual' 
+    : 'Crear un nuevo documento'}
+- O puedes especificar que el recordatorio es sobre este chat/documento
 
-        debugPrint(
-          'Added user message to observable list. Total messages: ${messages.length}',
-        );
+Ejemplo: "Haz un recordatorio para revisar este documento en 1 hora"''',
+          );
+          messages.add(suggestionMessage);
+          hasMessages.value = true;
+          _scrollToBottom();
 
-        // Update conversation title and generate context if it's the first message
-        if (messages.length == 1) {
-          await _updateConversationTitle(messageText);
-
-          // Generate and save context for personalized AI responses
-          await _generateAndSaveContext(messageText);
+          // Don't get AI response - just show the suggestion message
+          return; // Exit without creating reminder
         }
-
-        // Scroll to bottom
-        _scrollToBottom();
-
-      // PRIORITY 2: Check for reminder request (only in regular chat mode, not document mode)
-      // Make sure we're NOT in document mode before checking for reminders
-      // Also check if the message contains document keywords - if so, skip reminder detection
-      final bool hasDocumentKeywords = _hasDocumentKeywords(messageText);
-      if (!isDocumentMode.value && !hasDocumentKeywords) {
+        
         final reminderData = ReminderService.parseReminderFromMessage(
           messageText,
-          isDocumentMode: false, // Explicitly not in document mode
+          isDocumentMode: isDocumentMode.value,
         );
+        
         if (reminderData != null) {
           try {
             final reminderDate = reminderData['reminder_date'] as DateTime;
@@ -365,10 +498,10 @@ class ChatController extends GetxController {
             final Duration timeUntilReminder = reminderDate.difference(now);
             final String timeUntilReminderText = _formatTimeUntilReminder(timeUntilReminder);
 
-            // Add confirmation message to chat
+            // Add confirmation message to chat (single response, no AI response)
             final MessageLocal confirmationMessage = await ChatService.createAssistantMessage(
               conversationId: currentConversationId.value,
-              text: '✅ Reminder created: "$reminderTitle" at ${_formatReminderDate(reminderDate)}',
+              text: '✅ Reminder created: "$reminderTitle" at ${_formatReminderDate(reminderDate)}. You will receive a notification in $timeUntilReminderText.',
             );
             messages.add(confirmationMessage);
             hasMessages.value = true;
@@ -384,12 +517,34 @@ class ChatController extends GetxController {
               duration: const Duration(seconds: 2),
             );
 
-            // Still get AI response with reminder context
-            // Add a system message about the reminder so AI can mention when notification will be sent
-            final String reminderContextMessage = 'A reminder has been created: "$reminderTitle" scheduled for ${_formatReminderDate(reminderDate)}. The user will receive a notification in $timeUntilReminderText. Acknowledge this and let them know when they will receive the notification.';
+            // IMPORTANT: If reminder is related to existing document, do NOT create a new document
+            // Only create a new document if:
+            // 1. The reminder is NOT related to an existing document
+            // 2. AND the message explicitly requests creating a NEW document
+            final bool isDocumentRequest = _isDocumentRequest(messageText);
+            final bool hasExistingDocument = isDocumentMode.value || currentDocumentId.value != null;
             
-            await Future.delayed(const Duration(milliseconds: 300));
-            await _getAIResponseWithReminderContext(reminderContextMessage, messageText);
+            // Check if the document request is for creating a NEW document (not editing existing)
+            final bool isNewDocumentRequest = isDocumentRequest && 
+                !hasExistingDocument && 
+                !_isEditingExistingDocument(messageText);
+            
+            if (isNewDocumentRequest) {
+              // User wants both a reminder AND to create a NEW document
+              // Create the document after the reminder
+              debugPrint('User requested both reminder and NEW document creation');
+              await Future.delayed(const Duration(milliseconds: 500));
+              
+              // Activate document mode
+              isDocumentMode.value = true;
+              
+              // Generate document
+              await generateDocumentWithChecklist(messageText);
+              return; // Exit early after creating document
+            }
+
+            // Don't get additional AI response - just the confirmation message
+            return;
           } catch (e) {
             debugPrint('Error creating reminder: $e');
             Get.snackbar(
@@ -400,23 +555,39 @@ class ChatController extends GetxController {
               colorText: Colors.red[800],
               duration: const Duration(seconds: 2),
             );
-            // Continue with normal AI response
+            // Continue with normal flow
             await Future.delayed(const Duration(milliseconds: 300));
+            // Check if document should be created instead
+            final bool isDocumentRequest = _isDocumentRequest(messageText);
+            if (isDocumentRequest && !isDocumentMode.value) {
+              isDocumentMode.value = true;
+              await generateDocumentWithChecklist(messageText);
+              return;
+            }
             await _getAIResponse(messageText);
           }
-        } else {
-          // No reminder detected - proceed with normal AI response
-        // Wait a bit longer to ensure the message is fully saved and indexed in the database
-        await Future.delayed(const Duration(milliseconds: 300));
-
-        // Get AI response - pass the message text explicitly to ensure it's used
-          await _getAIResponse(messageText);
+          return; // Exit after handling reminder
         }
-      } else {
-        // Has document keywords or in document mode - skip reminder detection and get AI response
-        await Future.delayed(const Duration(milliseconds: 300));
-        await _getAIResponse(messageText);
       }
+
+      // PRIORITY 2: Check if message is requesting document creation
+      // Only if no reminder was detected
+      final bool isDocumentRequest = _isDocumentRequest(messageText);
+      if (isDocumentMode.value || isDocumentRequest) {
+        // If not already in document mode, activate it
+        if (!isDocumentMode.value) {
+          debugPrint('Document mode activated from message: $messageText');
+          isDocumentMode.value = true;
+        }
+
+        // In document mode, generate document with checklist
+        await generateDocumentWithChecklist(messageText);
+        return; // Exit early - don't process as regular chat
+      }
+
+      // PRIORITY 3: Regular chat mode - get AI response
+      await Future.delayed(const Duration(milliseconds: 300));
+      await _getAIResponse(messageText);
     } catch (e) {
       debugPrint('Error sending message: $e');
       _showErrorSnackbar('Error sending message');
@@ -506,18 +677,47 @@ class ChatController extends GetxController {
       );
 
       messages.add(aiMessage);
+      
+      // Check if stopped before continuing
+      if (_isStopped) {
+        debugPrint('Generation was stopped, not adding message');
+        return;
+      }
+      
       await Future.delayed(const Duration(milliseconds: 200));
+      
+      // Final check before scrolling
+      if (_isStopped) {
+        return;
+      }
+      
       _scrollToBottom();
     } catch (e) {
       debugPrint('Error getting AI response with reminder context: $e');
-      final MessageLocal errorMessage = await ChatService.createSystemMessage(
-        conversationId: currentConversationId.value,
-        text: 'Sorry, I encountered an error. Please try again.',
-      );
-      messages.add(errorMessage);
-      _scrollToBottom();
+      
+      // Don't show error message if it was stopped by user
+      if (_isStopped) {
+        debugPrint('Generation was stopped, skipping error message');
+        return; // Exit early if stopped
+      } else {
+        final MessageLocal errorMessage = await ChatService.createSystemMessage(
+          conversationId: currentConversationId.value,
+          text: 'Sorry, I encountered an error. Please try again.',
+        );
+        messages.add(errorMessage);
+        _scrollToBottom();
+      }
     } finally {
       isTyping.value = false;
+      // Don't reset _isStopped here if it was set by stopGeneration
+      // It will be reset by stopGeneration after cleanup
+      if (!_isStopped) {
+        _isStopped = false;
+      }
+      _currentRequest = null;
+      _currentHttpClient = null;
+      _currentStreamSubscription = null;
+      _currentGenerationCompleter = null;
     }
   }
 
@@ -725,6 +925,13 @@ class ChatController extends GetxController {
       // Call OpenAI API
       debugPrint('Calling OpenAI API with ${validMessages.length} messages');
       final String aiResponse = await _callOpenAIAPI(validMessages);
+      
+      // Check if stopped before processing response
+      if (_isStopped) {
+        debugPrint('Generation was stopped before processing response');
+        return;
+      }
+      
       debugPrint(
         'Received AI response: ${aiResponse.substring(0, aiResponse.length > 100 ? 100 : aiResponse.length)}...',
       );
@@ -736,10 +943,22 @@ class ChatController extends GetxController {
         throw Exception('Invalid or empty response from AI');
       }
 
+      // Check again before creating message
+      if (_isStopped) {
+        debugPrint('Generation was stopped before creating message');
+        return;
+      }
+
       final MessageLocal aiMessage = await ChatService.createAssistantMessage(
         conversationId: currentConversationId.value,
         text: aiResponse,
       );
+
+      // Final check before adding to messages
+      if (_isStopped) {
+        debugPrint('Generation was stopped before adding message');
+        return;
+      }
 
       debugPrint('AI message created with ID: ${aiMessage.id}');
       debugPrint('AI message role: ${aiMessage.role}');
@@ -770,34 +989,123 @@ class ChatController extends GetxController {
       _scrollToBottom();
     } catch (e) {
       debugPrint('Error getting AI response: $e');
+      
+      // Don't show error message if it was stopped by user
+      if (_isStopped) {
+        debugPrint('Generation was stopped, skipping error message');
+      } else {
+        // Add error message to chat
+        final MessageLocal errorMessage = await ChatService.createSystemMessage(
+          conversationId: currentConversationId.value,
+          text: 'Sorry, I encountered an error. Please try again.',
+        );
 
-      // Add error message to chat
-      final MessageLocal errorMessage = await ChatService.createSystemMessage(
-        conversationId: currentConversationId.value,
-        text: 'Sorry, I encountered an error. Please try again.',
-      );
-
-      messages.add(errorMessage);
-      _scrollToBottom();
+        messages.add(errorMessage);
+        _scrollToBottom();
+      }
     } finally {
       isTyping.value = false;
+      // Don't reset _isStopped here if it was set by stopGeneration
+      // It will be reset by stopGeneration after cleanup
+      if (!_isStopped) {
+        _isStopped = false;
+      }
+      _currentRequest = null;
+      _currentHttpClient = null;
+      _currentStreamSubscription = null;
+      _currentGenerationCompleter = null;
     }
+  }
+
+  /// Stop current generation
+  Future<void> stopGeneration() async {
+    if (!isTyping.value && _currentGenerationCompleter == null) return;
+    
+    debugPrint('Stopping generation...');
+    _isStopped = true;
+    
+    // Complete any pending generation with cancellation
+    if (_currentGenerationCompleter != null && !_currentGenerationCompleter!.isCompleted) {
+      _currentGenerationCompleter!.completeError('Generation stopped by user');
+    }
+    
+    try {
+      // Close current request if exists
+      _currentRequest?.abort();
+      _currentRequest?.close();
+    } catch (e) {
+      debugPrint('Error aborting request: $e');
+    }
+    
+    try {
+      // Close HTTP client if exists
+      _currentHttpClient?.close(force: true);
+    } catch (e) {
+      debugPrint('Error closing HTTP client: $e');
+    }
+    
+    // Reset typing state immediately
+    isTyping.value = false;
+    
+    // Cancel stream subscription if exists
+    try {
+      _currentStreamSubscription?.cancel();
+    } catch (e) {
+      debugPrint('Error canceling stream subscription: $e');
+    }
+    
+    // Reset state variables
+    _currentRequest = null;
+    _currentHttpClient = null;
+    _currentStreamSubscription = null;
+    _currentGenerationCompleter = null;
+    
+    // Add pause message to chat
+    try {
+      final MessageLocal pauseMessage = await ChatService.createSystemMessage(
+        conversationId: currentConversationId.value,
+        text: '⏸️ Respuesta pausada. Puedes continuar la conversación enviando un nuevo mensaje.',
+      );
+      messages.add(pauseMessage);
+      _scrollToBottom();
+    } catch (e) {
+      debugPrint('Error creating pause message: $e');
+    }
+    
+    // Reset stop flag after a delay to allow cleanup
+    Future.delayed(const Duration(milliseconds: 100), () {
+      _isStopped = false;
+    });
   }
 
   /// Call OpenAI API
   Future<String> _callOpenAIAPI(List<Map<String, String>> messages) async {
-    final HttpClient httpClient = HttpClient();
+    final Completer<String> generationCompleter = Completer<String>();
+    _currentGenerationCompleter = generationCompleter;
+    _isStopped = false;
+    _currentRequest = null;
+    _currentHttpClient = null;
 
     try {
+      final HttpClient httpClient = HttpClient();
+      _currentHttpClient = httpClient;
+
       // Check if API key is available
       if (openaiKey == null || openaiKey!.isEmpty) {
         throw Exception('OpenAI API key is not configured');
+      }
+
+      // Check if stopped before starting
+      if (_isStopped) {
+        throw Exception('Generation stopped by user');
       }
 
       debugPrint('Using OpenAI API key: ${openaiKey!.substring(0, 8)}...');
       final HttpClientRequest request = await httpClient.postUrl(
         Uri.parse('https://api.openai.com/v1/chat/completions'),
       );
+      
+      _currentRequest = request;
 
       // Set headers
       request.headers.set('Content-Type', 'application/json; charset=utf-8');
@@ -819,18 +1127,102 @@ class ChatController extends GetxController {
 
       request.write(jsonBody);
 
-      // Get response with timeout
-      final HttpClientResponse response = await request.close().timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          throw Exception('Request timeout after 30 seconds');
-        },
-      );
+      // Check if stopped before getting response
+      if (_isStopped) {
+        request.abort();
+        throw Exception('Generation stopped by user');
+      }
 
-      final String responseBody = await response.transform(utf8.decoder).join();
+      // Get response with timeout and cancellation support
+      HttpClientResponse? response;
+      try {
+        response = await request.close().timeout(
+          const Duration(seconds: 30),
+          onTimeout: () {
+            if (_isStopped) {
+              throw Exception('Generation stopped by user');
+            }
+            throw Exception('Request timeout after 30 seconds');
+          },
+        );
+      } catch (e) {
+        if (_isStopped) {
+          throw Exception('Generation stopped by user');
+        }
+        rethrow;
+      }
+
+      // Check if stopped during response
+      if (_isStopped) {
+        try {
+          response.detachSocket();
+        } catch (e) {
+          debugPrint('Error detaching socket: $e');
+        }
+        throw Exception('Generation stopped by user');
+      }
+
+      // Read response body with cancellation checks
+      final StringBuffer responseBuffer = StringBuffer();
+      final StreamCompleter = Completer<void>();
+      bool isStoppedDuringRead = false;
+      
+      _currentStreamSubscription = response.transform(utf8.decoder).listen(
+        (data) {
+          // Check if stopped during read
+          if (_isStopped) {
+            isStoppedDuringRead = true;
+            _currentStreamSubscription?.cancel();
+            if (!StreamCompleter.isCompleted) {
+              StreamCompleter.completeError('Generation stopped by user');
+            }
+            return;
+          }
+          responseBuffer.write(data);
+        },
+        onDone: () {
+          if (!StreamCompleter.isCompleted && !_isStopped) {
+            StreamCompleter.complete();
+          }
+        },
+        onError: (error) {
+          if (!StreamCompleter.isCompleted) {
+            if (_isStopped) {
+              StreamCompleter.completeError('Generation stopped by user');
+            } else {
+              StreamCompleter.completeError(error);
+            }
+          }
+        },
+        cancelOnError: true,
+      );
+      
+      // Wait for stream to complete, but check for cancellation
+      try {
+        await StreamCompleter.future;
+      } catch (e) {
+        if (_isStopped || isStoppedDuringRead) {
+          _currentStreamSubscription?.cancel();
+          throw Exception('Generation stopped by user');
+        }
+        rethrow;
+      }
+      
+      // Cancel subscription if stopped
+      if (_isStopped || isStoppedDuringRead) {
+        _currentStreamSubscription?.cancel();
+        throw Exception('Generation stopped by user');
+      }
+
+      // Check if stopped after reading response
+      if (_isStopped) {
+        throw Exception('Generation stopped by user');
+      }
+
+      final String responseBody = responseBuffer.toString();
 
       debugPrint('OpenAI API Response Status: ${response.statusCode}');
-      debugPrint('OpenAI API Response Body: $responseBody');
+      debugPrint('OpenAI API Response Body: ${responseBody.length > 200 ? responseBody.substring(0, 200) + "..." : responseBody}');
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(responseBody);
@@ -849,6 +1241,12 @@ class ChatController extends GetxController {
           throw Exception('Empty or invalid response from OpenAI');
         }
 
+        // Check one more time before returning
+        if (_isStopped) {
+          throw Exception('Generation stopped by user');
+        }
+
+        generationCompleter.complete(content);
         return content;
       } else {
         throw Exception(
@@ -856,10 +1254,52 @@ class ChatController extends GetxController {
         );
       }
     } catch (e) {
+      if (_isStopped) {
+        debugPrint('Generation stopped by user');
+        if (!generationCompleter.isCompleted) {
+          generationCompleter.completeError('Generation stopped');
+        }
+        throw Exception('Generation stopped');
+      }
       debugPrint('Error parsing OpenAI response: $e');
+      if (!generationCompleter.isCompleted) {
+        generationCompleter.completeError(e);
+      }
       rethrow;
     } finally {
-      httpClient.close();
+      // Force cleanup of all resources
+      try {
+        if (_currentRequest != null) {
+          _currentRequest!.abort();
+          _currentRequest!.close();
+        }
+      } catch (e) {
+        debugPrint('Error closing request: $e');
+      }
+      
+      try {
+        if (_currentHttpClient != null) {
+          _currentHttpClient!.close(force: true);
+        }
+      } catch (e) {
+        debugPrint('Error closing HTTP client: $e');
+      }
+      
+      // Cancel stream subscription if still active
+      try {
+        _currentStreamSubscription?.cancel();
+      } catch (e) {
+        debugPrint('Error canceling stream subscription in finally: $e');
+      }
+      
+      // Only reset state if not stopped by user
+      // If stopped, stopGeneration will handle cleanup
+      if (!_isStopped) {
+        _currentRequest = null;
+        _currentHttpClient = null;
+        _currentStreamSubscription = null;
+        _currentGenerationCompleter = null;
+      }
     }
   }
 
@@ -1050,13 +1490,8 @@ class ChatController extends GetxController {
       debugPrint('Starting document generation with AI checklist...');
       isGeneratingDocument.value = true;
 
-      // Add user message
-      final MessageLocal userMessage = await ChatService.createUserMessage(
-        conversationId: currentConversationId.value,
-        text: userRequest,
-      );
-      messages.add(userMessage);
-      hasMessages.value = true;
+      // Don't add user message here - it's already added in sendMessage()
+      // The user message was already added before calling this function
 
       // Generate checklist using AI
       isTyping.value = true;
@@ -1090,13 +1525,41 @@ class ChatController extends GetxController {
       // Wait a bit before showing completion to ensure smooth transition
       await Future.delayed(const Duration(milliseconds: 300));
 
+      // Detect language for completion message
+      final String detectedLanguage = _detectLanguage(userRequest);
+      
       // Show completion message only after document is fully generated
+      String completionMessage;
+      if (detectedLanguage == 'spanish') {
+        completionMessage = '''✅ ¡Documento generado exitosamente!
+
+Tu documento está listo. Toca este mensaje para abrir el editor y ver tu documento.''';
+      } else if (detectedLanguage == 'french') {
+        completionMessage = '''✅ Document généré avec succès!
+
+Votre document est prêt. Appuyez sur ce message pour ouvrir l'éditeur et voir votre document.''';
+      } else if (detectedLanguage == 'german') {
+        completionMessage = '''✅ Dokument erfolgreich erstellt!
+
+Ihr Dokument ist bereit. Tippen Sie auf diese Nachricht, um den Editor zu öffnen und Ihr Dokument anzuzeigen.''';
+      } else if (detectedLanguage == 'portuguese') {
+        completionMessage = '''✅ Documento gerado com sucesso!
+
+Seu documento está pronto. Toque nesta mensagem para abrir o editor e ver seu documento.''';
+      } else if (detectedLanguage == 'italian') {
+        completionMessage = '''✅ Documento generato con successo!
+
+Il tuo documento è pronto. Tocca questo messaggio per aprire l'editor e visualizzare il tuo documento.''';
+      } else {
+        completionMessage = '''✅ Document generated successfully!
+
+Your document is ready. Tap this message to open the editor and view your document.''';
+      }
+      
       final MessageLocal completedMessage =
           await ChatService.createAssistantMessage(
             conversationId: currentConversationId.value,
-            text: '''✅ Document generated successfully!
-
-Your document is ready. Tap this message to open the editor and view your document.''',
+            text: completionMessage,
           );
       messages.add(completedMessage);
 
@@ -1147,6 +1610,75 @@ Your document is ready. Tap this message to open the editor and view your docume
     }
   }
 
+  /// Detect language from text message
+  String _detectLanguage(String text) {
+    final String lowerText = text.toLowerCase();
+    
+    // Spanish keywords
+    final List<String> spanishKeywords = [
+      'crear', 'crea', 'escribir', 'escribe', 'documento', 'texto',
+      'hacer', 'haz', 'generar', 'genera', 'redactar', 'redacta',
+      'elaborar', 'elabora', 'componer', 'compone', 'un', 'una',
+      'para', 'con', 'sobre', 'del', 'de', 'la', 'las', 'los',
+      'porque', 'que', 'cuando', 'donde', 'como', 'por qué',
+    ];
+    
+    // French keywords
+    final List<String> frenchKeywords = [
+      'créer', 'écrire', 'document', 'texte', 'faire', 'générer',
+      'rédiger', 'pour', 'avec', 'sur', 'de', 'le', 'la', 'les',
+      'un', 'une', 'parce', 'que', 'quand', 'où', 'comment',
+    ];
+    
+    // German keywords
+    final List<String> germanKeywords = [
+      'erstellen', 'schreiben', 'dokument', 'text', 'machen', 'generieren',
+      'verfassen', 'für', 'mit', 'über', 'von', 'der', 'die', 'das',
+      'ein', 'eine', 'weil', 'wann', 'wo', 'wie', 'warum',
+    ];
+    
+    // Portuguese keywords
+    final List<String> portugueseKeywords = [
+      'criar', 'escrever', 'documento', 'texto', 'fazer', 'gerar',
+      'redigir', 'para', 'com', 'sobre', 'do', 'da', 'dos', 'das',
+      'um', 'uma', 'porque', 'que', 'quando', 'onde', 'como',
+    ];
+    
+    // Italian keywords
+    final List<String> italianKeywords = [
+      'creare', 'scrivere', 'documento', 'testo', 'fare', 'generare',
+      'redigere', 'per', 'con', 'su', 'del', 'della', 'dei', 'delle',
+      'un', 'una', 'perché', 'che', 'quando', 'dove', 'come',
+    ];
+    
+    // Count matches for each language
+    int spanishCount = spanishKeywords.where((kw) => lowerText.contains(kw)).length;
+    int frenchCount = frenchKeywords.where((kw) => lowerText.contains(kw)).length;
+    int germanCount = germanKeywords.where((kw) => lowerText.contains(kw)).length;
+    int portugueseCount = portugueseKeywords.where((kw) => lowerText.contains(kw)).length;
+    int italianCount = italianKeywords.where((kw) => lowerText.contains(kw)).length;
+    
+    // Find the language with the highest match count
+    final List<MapEntry<int, String>> languageCounts = [
+      MapEntry(spanishCount, 'spanish'),
+      MapEntry(frenchCount, 'french'),
+      MapEntry(germanCount, 'german'),
+      MapEntry(portugueseCount, 'portuguese'),
+      MapEntry(italianCount, 'italian'),
+    ];
+    
+    // Sort by count (descending) and get the highest
+    languageCounts.sort((a, b) => b.key.compareTo(a.key));
+    final int maxCount = languageCounts.first.key;
+    
+    // Default to English if no clear match (less than 2 matches)
+    if (maxCount < 2) {
+      return 'english'; // Default to English
+    }
+    
+    return languageCounts.first.value;
+  }
+
   /// Generate checklist for document creation using AI
   Future<String> _generateDocumentChecklist(String userRequest) async {
     if (openaiKey == null) {
@@ -1156,14 +1688,15 @@ Your document is ready. Tap this message to open the editor and view your docume
     final HttpClient httpClient = HttpClient();
     try {
       debugPrint('Calling OpenAI to generate document checklist...');
+      
+      // Detect language from user request
+      final String detectedLanguage = _detectLanguage(userRequest);
+      debugPrint('Detected language for document checklist: $detectedLanguage');
 
       // Prepare system message for checklist generation
       // IMPORTANT: Do NOT apply any chat rules here - document generation should be independent
-      final List<Map<String, String>> messages = [
-        {
-          'role': 'system',
-          'content':
-              '''You are a helpful assistant that creates planning checklists for document creation.
+      final String systemPrompt = detectedLanguage == 'english'
+          ? '''You are a helpful assistant that creates planning checklists for document creation.
           
 IMPORTANT: When creating checklists for documents, ignore any chat rules or custom instructions. Focus ONLY on the document creation task.
 
@@ -1178,7 +1711,30 @@ Format your response as:
 ✓ [Fourth step]
 ⏳ Generating your document now...
 
-Keep it concise, relevant, and focused on the specific document type requested. Do not add any extra text, greetings, or content beyond the checklist.''',
+Keep it concise, relevant, and focused on the specific document type requested. Do not add any extra text, greetings, or content beyond the checklist.'''
+          : '''You are a helpful assistant that creates planning checklists for document creation.
+          
+IMPORTANT: When creating checklists for documents, ignore any chat rules or custom instructions. Focus ONLY on the document creation task.
+
+CRITICAL: Respond in ${detectedLanguage == 'spanish' ? 'Spanish (Español)' : detectedLanguage == 'french' ? 'French (Français)' : detectedLanguage == 'german' ? 'German (Deutsch)' : detectedLanguage == 'portuguese' ? 'Portuguese (Português)' : detectedLanguage == 'italian' ? 'Italian (Italiano)' : 'the same language as the user'}. Use the same language that the user used in their request.
+
+When given a document request, create a brief checklist (4-6 items) showing the steps you'll take to create it.
+
+Format your response as:
+📋 ${detectedLanguage == 'spanish' ? 'Planificando tu documento...' : detectedLanguage == 'french' ? 'Planification de votre document...' : detectedLanguage == 'german' ? 'Planung Ihres Dokuments...' : detectedLanguage == 'portuguese' ? 'Planejando seu documento...' : detectedLanguage == 'italian' ? 'Pianificazione del tuo documento...' : 'Planning your document...'}
+
+✓ [First step]
+✓ [Second step]
+✓ [Third step]
+✓ [Fourth step]
+⏳ ${detectedLanguage == 'spanish' ? 'Generando tu documento ahora...' : detectedLanguage == 'french' ? 'Génération de votre document en cours...' : detectedLanguage == 'german' ? 'Generierung Ihres Dokuments...' : detectedLanguage == 'portuguese' ? 'Gerando seu documento agora...' : detectedLanguage == 'italian' ? 'Generazione del tuo documento...' : 'Generating your document now...'}
+
+Keep it concise, relevant, and focused on the specific document type requested. Do not add any extra text, greetings, or content beyond the checklist. Respond entirely in ${detectedLanguage == 'spanish' ? 'Spanish' : detectedLanguage == 'french' ? 'French' : detectedLanguage == 'german' ? 'German' : detectedLanguage == 'portuguese' ? 'Portuguese' : detectedLanguage == 'italian' ? 'Italian' : 'English'}.''';
+
+      final List<Map<String, String>> messages = [
+        {
+          'role': 'system',
+          'content': systemPrompt,
         },
         {'role': 'user', 'content': userRequest},
       ];
@@ -1236,13 +1792,57 @@ Keep it concise, relevant, and focused on the specific document type requested. 
     } catch (e) {
       debugPrint('Error calling OpenAI for checklist: $e');
       // Return a fallback checklist if AI fails
-      return '''📋 Planning your document...
+      // Fallback checklist in detected language
+      final String detectedLanguage = _detectLanguage(userRequest);
+      if (detectedLanguage == 'spanish') {
+        return '''📋 Planificando tu documento...
+
+✓ Entendiendo tus requisitos
+✓ Estructurando el contenido
+✓ Preparando secciones
+✓ Organizando información
+⏳ Generando tu documento ahora...''';
+      } else if (detectedLanguage == 'french') {
+        return '''📋 Planification de votre document...
+
+✓ Compréhension de vos exigences
+✓ Structuration du contenu
+✓ Préparation des sections
+✓ Organisation de l'information
+⏳ Génération de votre document en cours...''';
+      } else if (detectedLanguage == 'german') {
+        return '''📋 Planung Ihres Dokuments...
+
+✓ Verständnis Ihrer Anforderungen
+✓ Strukturierung des Inhalts
+✓ Vorbereitung der Abschnitte
+✓ Organisation der Informationen
+⏳ Generierung Ihres Dokuments...''';
+      } else if (detectedLanguage == 'portuguese') {
+        return '''📋 Planejando seu documento...
+
+✓ Entendendo seus requisitos
+✓ Estruturando o conteúdo
+✓ Preparando seções
+✓ Organizando informações
+⏳ Gerando seu documento agora...''';
+      } else if (detectedLanguage == 'italian') {
+        return '''📋 Pianificazione del tuo documento...
+
+✓ Comprensione dei tuoi requisiti
+✓ Strutturazione del contenuto
+✓ Preparazione delle sezioni
+✓ Organizzazione delle informazioni
+⏳ Generazione del tuo documento...''';
+      } else {
+        return '''📋 Planning your document...
 
 ✓ Understanding your requirements
 ✓ Structuring the content
 ✓ Preparing sections
 ✓ Organizing information
 ⏳ Generating your document now...''';
+      }
     } finally {
       httpClient.close();
     }
@@ -1409,8 +2009,13 @@ Make it comprehensive and ready to use with proper markdown formatting. Only inc
       final versions = await DocumentService.getDocumentVersions(docId);
       final currentDoc = await DocumentService.getDocument(docId);
       
-      // If there are multiple versions, show selector
-      if (versions.isNotEmpty || (currentDoc != null && (currentDoc['version_number'] as int? ?? 1) > 1)) {
+      debugPrint('Document versions found: ${versions.length}');
+      debugPrint('Current document version: ${currentDoc?['version_number'] ?? 1}');
+      
+      // If there are versions or version number > 1, show selector
+      final int currentVersion = currentDoc?['version_number'] as int? ?? 1;
+      if (versions.isNotEmpty || currentVersion > 1) {
+        debugPrint('Showing version selector dialog');
         await _showVersionSelector(
           docId: docId,
           title: title ?? 'Document',
@@ -1419,6 +2024,7 @@ Make it comprehensive and ready to use with proper markdown formatting. Only inc
           versions: versions,
         );
       } else {
+        debugPrint('No versions found, opening document directly');
         // Only one version or no versions, open directly
         final content = currentDoc?['content'] as String? ?? document ?? '';
         _openDocumentEditorWithContent(
@@ -1519,120 +2125,127 @@ Make it comprehensive and ready to use with proper markdown formatting. Only inc
     // Sort by version number descending
     allVersions.sort((a, b) => (b['version_number'] as int).compareTo(a['version_number'] as int));
     
-    // Show dialog
-    final selectedVersion = await showDialog<Map<String, dynamic>>(
-      context: Get.context!,
-      builder: (context) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        return AlertDialog(
+    // Show dialog using GetX dialog
+    final isDark = Get.theme.brightness == Brightness.dark;
+    final selectedVersion = await Get.dialog<Map<String, dynamic>>(
+      barrierDismissible: true,
+      AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text(
             'Select Document Version',
             style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.bold),
           ),
-          content: SizedBox(
+          content: Container(
             width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: allVersions.length,
-              itemBuilder: (context, index) {
-                final version = allVersions[index];
-                final versionNum = version['version_number'] as int;
-                final isCurrent = version['is_current'] as bool;
-                final changeSummary = version['change_summary'] as String?;
-                final createdAt = version['created_at'] as String?;
-                
-                return ListTile(
-                  title: Row(
-                    children: [
-                      Text(
-                        'Version $versionNum',
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      if (isCurrent) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            'Current',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 10,
-                              color: Colors.green,
-                              fontWeight: FontWeight.bold,
+            constraints: const BoxConstraints(maxHeight: 400),
+            child: allVersions.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text(
+                      'No versions found',
+                      style: TextStyle(fontFamily: 'Poppins'),
+                    ),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: allVersions.length,
+                    itemBuilder: (context, index) {
+                      final version = allVersions[index];
+                      final versionNum = version['version_number'] as int;
+                      final isCurrent = version['is_current'] as bool;
+                      final changeSummary = version['change_summary'] as String?;
+                      final createdAt = version['created_at'] as String?;
+                      
+                      return ListTile(
+                        title: Row(
+                          children: [
+                            Text(
+                              'Version $versionNum',
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
+                            if (isCurrent) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'Current',
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 10,
+                                    color: Colors.green,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            if (savedVersion != null && versionNum == savedVersion) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'Saved',
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 10,
+                                    color: Colors.blue,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                      ],
-                      if (savedVersion != null && versionNum == savedVersion) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            'Saved',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 10,
-                              color: Colors.blue,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (createdAt != null)
+                              Text(
+                                _formatDate(createdAt),
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 12,
+                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                ),
+                              ),
+                            if (changeSummary != null && changeSummary.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                changeSummary,
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 11,
+                                  fontStyle: FontStyle.italic,
+                                  color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ],
                         ),
-                      ],
-                    ],
+                        onTap: () => Get.back(result: version),
+                      );
+                    },
                   ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (createdAt != null)
-                        Text(
-                          _formatDate(createdAt),
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 12,
-                            color: isDark ? Colors.grey[400] : Colors.grey[600],
-                          ),
-                        ),
-                      if (changeSummary != null && changeSummary.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          changeSummary,
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 11,
-                            fontStyle: FontStyle.italic,
-                            color: isDark ? Colors.grey[300] : Colors.grey[700],
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
-                  ),
-                  onTap: () => Navigator.pop(context, version),
-                );
-              },
-            ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Get.back(),
               child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins')),
             ),
           ],
-        );
-      },
+        ),
     );
     
     if (selectedVersion != null) {

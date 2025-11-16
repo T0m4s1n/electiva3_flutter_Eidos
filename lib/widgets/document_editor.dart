@@ -1202,30 +1202,64 @@ IMPORTANT:
   }
 
   void _acceptAllSuggestions() {
-    // Apply all suggestions in reverse order to maintain positions
-    final sortedSuggestions = List<AISuggestion>.from(_aiSuggestions)
-      ..sort((a, b) => b.start.compareTo(a.start));
+    if (_aiSuggestions.isEmpty) return;
     
-    String text = _contentController.text;
-    for (final suggestion in sortedSuggestions) {
-      if (suggestion.isDeletion) {
-        text = text.substring(0, suggestion.start) + text.substring(suggestion.end);
-      } else {
-        text = text.substring(0, suggestion.start) + 
-               (suggestion.replacement ?? '') + 
-               text.substring(suggestion.end);
+    try {
+      // Apply all suggestions in reverse order to maintain positions
+      final sortedSuggestions = List<AISuggestion>.from(_aiSuggestions)
+        ..sort((a, b) => b.start.compareTo(a.start));
+      
+      String text = _contentController.text;
+      
+      for (final suggestion in sortedSuggestions) {
+        // Calculate current positions accounting for previous edits
+        final currentStart = suggestion.start;
+        final currentEnd = suggestion.end;
+        
+        // Validate indices are within bounds
+        if (currentStart < 0 || currentEnd < currentStart || currentEnd > text.length) {
+          debugPrint('Invalid suggestion indices: start=$currentStart, end=$currentEnd, textLength=${text.length}');
+          continue; // Skip invalid suggestions
+        }
+        
+        try {
+          if (suggestion.isDeletion) {
+            // Delete the text from start to end
+            text = text.substring(0, currentStart) + text.substring(currentEnd);
+          } else {
+            // Replace with new text
+            final replacement = suggestion.replacement ?? '';
+            text = text.substring(0, currentStart) + 
+                   replacement + 
+                   text.substring(currentEnd);
+          }
+        } catch (e) {
+          debugPrint('Error applying suggestion: $e');
+          debugPrint('Suggestion: start=$currentStart, end=$currentEnd, isDeletion=${suggestion.isDeletion}');
+          debugPrint('Text length: ${text.length}');
+          continue; // Skip this suggestion if it fails
+        }
       }
+      
+      // Update the controller and state
+      _contentController.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+      
+      setState(() {
+        _aiSuggestions.clear();
+        _showFormattedPreview = true; // Show markdown again after accepting all
+        _hasChanges = true;
+      });
+      
+      Get.snackbar('Success', 'All suggestions applied',
+        snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.green[100], colorText: Colors.green[800]);
+    } catch (e) {
+      debugPrint('Error in _acceptAllSuggestions: $e');
+      Get.snackbar('Error', 'Failed to apply some suggestions',
+        snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.red[100], colorText: Colors.red[800]);
     }
-    
-    _contentController.text = text;
-    setState(() {
-      _aiSuggestions.clear();
-      _showFormattedPreview = true; // Show markdown again after accepting all
-      _hasChanges = true;
-    });
-    
-    Get.snackbar('Success', 'All suggestions applied',
-      snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.green[100], colorText: Colors.green[800]);
   }
 
   void _declineSuggestion(AISuggestion suggestion) {

@@ -96,7 +96,9 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                 () => ChatInput(
                   controller: chatController.messageController,
                   onSend: chatController.sendMessage,
+                  onStop: chatController.stopGeneration,
                   isLoading: chatController.isLoading.value,
+                  isTyping: chatController.isTyping.value,
                 ),
               ),
             ],
@@ -177,10 +179,26 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
         itemBuilder: (context, index) {
           final message = displayMessages[index];
           
-          // Check if this is a completion message with document ready
+          // Check if this is a completion message with document ready (all languages)
           final String messageText = _getMessageText(message);
           final bool isDocumentReady = messageText.contains('Document generated successfully') ||
-                                      messageText.contains('Your document is ready');
+                                      messageText.contains('Your document is ready') ||
+                                      messageText.contains('Documento generado exitosamente') ||
+                                      messageText.contains('Tu documento está listo') ||
+                                      messageText.contains('Document généré avec succès') ||
+                                      messageText.contains('Votre document est prêt') ||
+                                      messageText.contains('Dokument erfolgreich erstellt') ||
+                                      messageText.contains('Ihr Dokument ist bereit') ||
+                                      messageText.contains('Documento gerado com sucesso') ||
+                                      messageText.contains('Seu documento está pronto') ||
+                                      messageText.contains('Documento generato con successo') ||
+                                      messageText.contains('Il tuo documento è pronto') ||
+                                      messageText.contains('Toca este mensaje') ||
+                                      messageText.contains('Tap this message') ||
+                                      messageText.contains('Appuyez sur ce message') ||
+                                      messageText.contains('Tippen Sie auf diese Nachricht') ||
+                                      messageText.contains('Toque nesta mensagem') ||
+                                      messageText.contains('Tocca questo messaggio');
           
           // Only animate messages that were added AFTER initial load
           // Messages at index < _initialMessageCount were loaded from database

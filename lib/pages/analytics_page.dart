@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import '../services/chat_database.dart';
+import '../services/document_service.dart';
 import '../widgets/animated_icon_background.dart';
 
 class AnalyticsPage extends StatefulWidget {
@@ -33,7 +34,11 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       final Database db = await ChatDatabase.instance;
       final convs = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM conversations')) ?? 0;
       final msgs = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM messages WHERE is_deleted = 0')) ?? 0;
-      final docs = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM documents')) ?? 0;
+      
+      // Get documents using DocumentService to ensure correct counting
+      // This includes both local and Supabase documents, filtered by is_current_version
+      final List<Map<String, dynamic>> allDocuments = await DocumentService.getAllDocuments();
+      final docs = allDocuments.length;
 
       final double avgMsgs = convs == 0 ? 0.0 : msgs.toDouble() / convs.toDouble();
       final double avgDocs = convs == 0 ? 0.0 : docs.toDouble() / convs.toDouble();
@@ -49,7 +54,13 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         final dayEnd = DateTime(day.year, day.month, day.day, 23, 59, 59).toIso8601String();
         final m = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM messages WHERE is_deleted = 0 AND created_at BETWEEN ? AND ?', [dayStart, dayEnd])) ?? 0;
         final c = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM conversations WHERE created_at BETWEEN ? AND ?', [dayStart, dayEnd])) ?? 0;
-        final d = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM documents WHERE created_at BETWEEN ? AND ?', [dayStart, dayEnd])) ?? 0;
+        
+        // Count documents created on this day (filter by is_current_version = 1)
+        final d = Sqflite.firstIntValue(await db.rawQuery(
+          'SELECT COUNT(*) FROM documents WHERE is_current_version = 1 AND created_at BETWEEN ? AND ?', 
+          [dayStart, dayEnd]
+        )) ?? 0;
+        
         msgs7.add(_DailyPoint(label: _fmtDay(day), value: m));
         convs7.add(_DailyPoint(label: _fmtDay(day), value: c));
         docs7.add(_DailyPoint(label: _fmtDay(day), value: d));

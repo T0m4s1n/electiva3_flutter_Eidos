@@ -351,41 +351,44 @@ class _MessageBubbleState extends State<MessageBubble> {
               if (widget.onTap != null && !widget.isUser)
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.blue[900] : Colors.blue[50],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.blue[700]!, width: 2),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.description,
-                          size: 20,
-                          color: Colors.blue[700],
-                        ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            'Tap to Open Document',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 14,
-                              color: Colors.blue[700],
-                              fontWeight: FontWeight.bold,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+                  child: GestureDetector(
+                    onTap: widget.onTap,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.blue[900] : Colors.blue[50],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.blue[700]!, width: 2),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.edit_document,
+                            size: 20,
+                            color: Colors.blue[700],
                           ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          Icons.arrow_forward,
-                          size: 18,
-                          color: Colors.blue[700],
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              'Open Editor',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 14,
+                                color: Colors.blue[700],
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.arrow_forward,
+                            size: 18,
+                            color: Colors.blue[700],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -560,21 +563,64 @@ class TypingIndicator extends StatelessWidget {
 
 class ChatInput extends StatefulWidget {
   final VoidCallback? onSend;
+  final VoidCallback? onStop;
   final TextEditingController controller;
   final bool isLoading;
+  final bool isTyping;
 
   const ChatInput({
     super.key,
     this.onSend,
+    this.onStop,
     required this.controller,
     this.isLoading = false,
+    this.isTyping = false,
   });
 
   @override
   State<ChatInput> createState() => _ChatInputState();
 }
 
-class _ChatInputState extends State<ChatInput> {
+class _ChatInputState extends State<ChatInput> with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _animation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    );
+    
+    // Start animation when typing
+    if (widget.isTyping) {
+      _animationController.forward();
+    }
+  }
+
+  @override
+  void didUpdateWidget(ChatInput oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isTyping != oldWidget.isTyping) {
+      if (widget.isTyping) {
+        _animationController.forward();
+      } else {
+        _animationController.reverse();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
@@ -627,7 +673,7 @@ class _ChatInputState extends State<ChatInput> {
                   // Handle text changes if needed
                 },
                 onSubmitted: (value) {
-                  if (value.trim().isNotEmpty && !widget.isLoading) {
+                  if (value.trim().isNotEmpty && !widget.isLoading && !widget.isTyping) {
                     widget.onSend?.call();
                   }
                 },
@@ -638,40 +684,66 @@ class _ChatInputState extends State<ChatInput> {
 
           const SizedBox(width: 12),
 
-          // Send button
-          GestureDetector(
-            onTap: widget.isLoading ? null : widget.onSend,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: widget.isLoading 
-                    ? Colors.grey[300] 
-                    : (isDark ? Colors.white : Colors.black87),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: isDark 
-                      ? (widget.isLoading ? Colors.grey[300]! : Colors.white)
-                      : Colors.black87,
-                ),
-              ),
-              child: widget.isLoading
-                  ? SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          isDark ? Colors.black87 : Colors.white,
-                        ),
-                      ),
-                    )
-                  : Icon(
-                      Icons.send,
-                      color: isDark ? Colors.black87 : Colors.white,
-                      size: 20,
+          // Send/Pause button with animation
+          AnimatedBuilder(
+            animation: _animation,
+            builder: (context, child) {
+              final bool showPause = widget.isTyping;
+              
+              return GestureDetector(
+                onTap: showPause 
+                    ? widget.onStop 
+                    : (widget.isLoading ? null : widget.onSend),
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: showPause
+                        ? Colors.red[400]
+                        : (widget.isLoading 
+                            ? Colors.grey[300] 
+                            : (isDark ? Colors.white : Colors.black87)),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: showPause
+                          ? Colors.red[600]!
+                          : (isDark 
+                              ? (widget.isLoading ? Colors.grey[300]! : Colors.white)
+                              : Colors.black87),
+                      width: showPause ? 2 : 1,
                     ),
-            ),
+                  ),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: showPause
+                        ? Icon(
+                            Icons.pause,
+                            key: const ValueKey('pause'),
+                            color: Colors.white,
+                            size: 20,
+                          )
+                        : (widget.isLoading
+                            ? SizedBox(
+                                key: const ValueKey('loading'),
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    isDark ? Colors.black87 : Colors.white,
+                                  ),
+                                ),
+                              )
+                            : Icon(
+                                Icons.send,
+                                key: const ValueKey('send'),
+                                color: isDark ? Colors.black87 : Colors.white,
+                                size: 20,
+                              )),
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),

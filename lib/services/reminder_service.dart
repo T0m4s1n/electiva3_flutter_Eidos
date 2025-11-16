@@ -611,20 +611,22 @@ class ReminderService {
     
     // Patterns that indicate a clear time reference
     final List<RegExp> timePatterns = [
-      // "in X minutes/hours/days/weeks"
-      RegExp(r'\bin\s+\d+\s+(minute|hour|day|week)s?\b', caseSensitive: false),
-      // "tomorrow"
-      RegExp(r'\btomorrow\b', caseSensitive: false),
-      // "today at X:XX" or "at X:XX"
-      RegExp(r'\b(today\s+)?at\s+\d{1,2}:\d{2}\b', caseSensitive: false),
-      // "in X hours/days"
-      RegExp(r'\bin\s+\d+\s+(hour|day)s?\b', caseSensitive: false),
-      // "on [day]" like "on Monday", "on Friday"
-      RegExp(r'\bon\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b', caseSensitive: false),
-      // "next [day]" like "next week", "next Monday"
-      RegExp(r'\bnext\s+(week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b', caseSensitive: false),
-      // "at X o'clock" or "at X pm/am"
-      RegExp(r"\bat\s+\d{1,2}\s*(o'clock|pm|am)\b", caseSensitive: false),
+      // "in X minutes/hours/days/weeks" (English)
+      RegExp(r'\bin\s+\d+\s+(minute|minutes|hour|hours|day|days|week|weeks)?\b', caseSensitive: false),
+      // "en X minutos/horas/días" (Spanish)
+      RegExp(r'\ben\s+\d+\s+(minuto|minutos|hora|horas|día|días|semana|semanas)?\b', caseSensitive: false),
+      // "X minutos/minutes/horas/hours" (direct, without "en/in")
+      RegExp(r'\b\d+\s+(minuto|minutos|minutes?|hora|horas|hours?|día|días|days?|semana|semanas|weeks?)\b', caseSensitive: false),
+      // "tomorrow" or "mañana"
+      RegExp(r'\b(tomorrow|mañana)\b', caseSensitive: false),
+      // "today at X:XX" or "hoy a las X:XX" or "at X:XX"
+      RegExp(r'\b(today|hoy\s+)?(at|a las)\s+\d{1,2}:\d{2}\b', caseSensitive: false),
+      // "on [day]" like "on Monday", "on Friday", "el lunes", etc.
+      RegExp(r'\b(on|el)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|lunes|martes|miércoles|jueves|viernes|sábado|domingo)\b', caseSensitive: false),
+      // "next [day]" like "next week", "next Monday", "próxima semana"
+      RegExp(r'\b(next|próxima|próximo)\s+(week|monday|tuesday|wednesday|thursday|friday|saturday|sunday|semana|lunes|martes|miércoles|jueves|viernes|sábado|domingo)\b', caseSensitive: false),
+      // "at X o'clock" or "at X pm/am" or "a las X"
+      RegExp(r"\b(at|a las)\s+\d{1,2}\s*(o'?clock|pm|am|de la (mañana|tarde|noche))?\b", caseSensitive: false),
     ];
 
     // Check if any time pattern matches
@@ -636,12 +638,37 @@ class ReminderService {
     final String lowerMessage = message.toLowerCase();
     final DateTime now = DateTime.now();
 
-    // Check for "in X minutes/hours/days"
-    final RegExp inTimeRegex = RegExp(r'in (\d+) (minute|hour|day|week)s?', caseSensitive: false);
+    // Check for "en X minutos/horas/días" (Spanish)
+    final RegExp inTimeRegexSpanish = RegExp(r'en\s+(\d+)\s+(minuto|minutos|hora|horas|día|días|semana|semanas)?', caseSensitive: false);
+    final matchSpanish = inTimeRegexSpanish.firstMatch(lowerMessage);
+    if (matchSpanish != null) {
+      final int amount = int.tryParse(matchSpanish.group(1) ?? '') ?? 0;
+      final String unit = (matchSpanish.group(2) ?? '').toLowerCase();
+      
+      if (unit.contains('minuto')) {
+        return now.add(Duration(minutes: amount));
+      } else if (unit.contains('hora')) {
+        return now.add(Duration(hours: amount));
+      } else if (unit.contains('día')) {
+        return now.add(Duration(days: amount));
+      } else if (unit.contains('semana')) {
+        return now.add(Duration(days: amount * 7));
+      } else if (amount > 0) {
+        // If number is found but no unit, default to minutes for small numbers, hours for large
+        if (amount <= 60) {
+          return now.add(Duration(minutes: amount));
+        } else {
+          return now.add(Duration(hours: amount));
+        }
+      }
+    }
+
+    // Check for "in X minutes/hours/days" (English)
+    final RegExp inTimeRegex = RegExp(r'\bin\s+(\d+)\s+(minute|minutes|hour|hours|day|days|week|weeks)?', caseSensitive: false);
     final match = inTimeRegex.firstMatch(lowerMessage);
     if (match != null) {
       final int amount = int.tryParse(match.group(1) ?? '') ?? 0;
-      final String unit = match.group(2)?.toLowerCase() ?? '';
+      final String unit = (match.group(2) ?? '').toLowerCase();
       
       if (unit.startsWith('minute')) {
         return now.add(Duration(minutes: amount));
@@ -651,25 +678,66 @@ class ReminderService {
         return now.add(Duration(days: amount));
       } else if (unit.startsWith('week')) {
         return now.add(Duration(days: amount * 7));
+      } else if (amount > 0) {
+        // If number is found but no unit, default to minutes for small numbers, hours for large
+        if (amount <= 60) {
+          return now.add(Duration(minutes: amount));
+        } else {
+          return now.add(Duration(hours: amount));
+        }
       }
     }
 
-    // Check for "tomorrow"
-    if (lowerMessage.contains('tomorrow')) {
+    // Check for "X minutos/minutes/horas/hours" without "en/in"
+    final RegExp directTimeRegex = RegExp(r'(\d+)\s+(minuto|minutos|minutes?|hora|horas|hours?|día|días|days?|semana|semanas|weeks?)\b', caseSensitive: false);
+    final directMatch = directTimeRegex.firstMatch(lowerMessage);
+    if (directMatch != null) {
+      final int amount = int.tryParse(directMatch.group(1) ?? '') ?? 0;
+      final String unit = (directMatch.group(2) ?? '').toLowerCase();
+      
+      if (unit.contains('minuto') || unit.contains('minute')) {
+        return now.add(Duration(minutes: amount));
+      } else if (unit.contains('hora') || unit.contains('hour')) {
+        return now.add(Duration(hours: amount));
+      } else if (unit.contains('día') || unit.contains('day')) {
+        return now.add(Duration(days: amount));
+      } else if (unit.contains('semana') || unit.contains('week')) {
+        return now.add(Duration(days: amount * 7));
+      }
+    }
+
+    // Check for "tomorrow" or "mañana"
+    if (lowerMessage.contains('tomorrow') || lowerMessage.contains('mañana')) {
       return DateTime(now.year, now.month, now.day + 1, 9, 0);
     }
 
-    // Check for "today at X:XX"
+    // Check for "today at X:XX" or "hoy a las X:XX"
     final RegExp timeRegex = RegExp(r'(\d{1,2}):(\d{2})');
     final timeMatch = timeRegex.firstMatch(message);
-    if (timeMatch != null && lowerMessage.contains('today')) {
+    if (timeMatch != null && (lowerMessage.contains('today') || lowerMessage.contains('hoy'))) {
       final int hour = int.tryParse(timeMatch.group(1) ?? '') ?? 9;
       final int minute = int.tryParse(timeMatch.group(2) ?? '') ?? 0;
       final DateTime todayTime = DateTime(now.year, now.month, now.day, hour, minute);
       return todayTime.isBefore(now) ? todayTime.add(const Duration(days: 1)) : todayTime;
     }
 
-    // Default: 1 hour from now
+    // Check for "at X o'clock" or "a las X"
+    final RegExp oclockRegex = RegExp(r"(?:at|a las)\s+(\d{1,2})\s*(?:o'clock|pm|am|de la (mañana|tarde|noche))?", caseSensitive: false);
+    final oclockMatch = oclockRegex.firstMatch(lowerMessage);
+    if (oclockMatch != null) {
+      int hour = int.tryParse(oclockMatch.group(1) ?? '') ?? 9;
+      final String period = (oclockMatch.group(2) ?? '').toLowerCase();
+      
+      // Handle Spanish time periods
+      if (period.contains('tarde') || period.contains('noche')) {
+        if (hour < 12) hour += 12;
+      }
+      
+      final DateTime todayTime = DateTime(now.year, now.month, now.day, hour, 0);
+      return todayTime.isBefore(now) ? todayTime.add(const Duration(days: 1)) : todayTime;
+    }
+
+    // Default: 1 hour from now if no time detected
     return now.add(const Duration(hours: 1));
   }
 }
