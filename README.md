@@ -175,4 +175,4 @@ If you see asset (Lottie) errors, ensure `assets/fonts/svgs/` contains the JSON 
 debugPrint('Error: $e');
 ```
 
-**Enjoy using Eidos!** 🚀
+hoy vengo disfrazado de esperanza
