@@ -228,7 +228,7 @@ class _AnimatedHeaderState extends State<AnimatedHeader>
                       padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
                         color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white.withOpacity(0.1)
+                            ? Colors.white.withValues(alpha: 0.1)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(8),
                       ),

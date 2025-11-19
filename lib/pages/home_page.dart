@@ -317,7 +317,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, Single
                                       focusedBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
                                         borderSide: BorderSide(
-                                          color: Colors.blue.withOpacity(0.5),
+                                          color: Colors.blue.withValues(alpha: 0.5),
                                           width: 2,
                                         ),
                                       ),

@@ -358,13 +358,13 @@ class _ConversationsListState extends State<ConversationsList>
               gradient: RadialGradient(
                 colors: isDark
                   ? [
-                      Colors.blue[400]!.withOpacity(0.2),
-                      Colors.purple[400]!.withOpacity(0.1),
+                      Colors.blue[400]!.withValues(alpha: 0.2),
+                      Colors.purple[400]!.withValues(alpha: 0.1),
                       Colors.transparent,
                     ]
                   : [
-                      Colors.blue[100]!.withOpacity(0.5),
-                      Colors.purple[100]!.withOpacity(0.3),
+                      Colors.blue[100]!.withValues(alpha: 0.5),
+                      Colors.purple[100]!.withValues(alpha: 0.3),
                       Colors.transparent,
                     ],
                 stops: const [0.0, 0.5, 1.0],
@@ -408,7 +408,7 @@ class _ConversationsListState extends State<ConversationsList>
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
@@ -511,7 +511,7 @@ class _ConversationsListState extends State<ConversationsList>
               ),
               boxShadow: [
                 BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
+                    color: Colors.black.withValues(alpha: 0.08),
                     blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -567,7 +567,7 @@ class _ConversationsListState extends State<ConversationsList>
                         ),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: isDark ? Colors.blue[400]!.withOpacity(0.3) : Colors.blue[300]!,
+                          color: isDark ? Colors.blue[400]!.withValues(alpha: 0.3) : Colors.blue[300]!,
                           width: 1,
                         ),
                       ),

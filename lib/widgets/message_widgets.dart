@@ -262,22 +262,22 @@ class _MessageBubbleState extends State<MessageBubble> {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(widget.isUser ? 0.15 : 0.08),
+                color: Colors.black.withValues(alpha: widget.isUser ? 0.15 : 0.08),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
                 spreadRadius: 0,
               ),
               BoxShadow(
                 color: widget.isUser
-                    ? (isDark ? Colors.white.withOpacity(0.1) : Colors.black87.withOpacity(0.05))
-                    : (isDark ? Colors.grey.withOpacity(0.1) : Colors.grey.withOpacity(0.05)),
+                    ? (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black87.withValues(alpha: 0.05))
+                    : (isDark ? Colors.grey.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.05)),
                 blurRadius: 20,
                 offset: const Offset(0, 8),
                 spreadRadius: -2,
               ),
               if (widget.onTap != null && !widget.isUser)
                 BoxShadow(
-                  color: Colors.blue.withOpacity(0.2),
+                  color: Colors.blue.withValues(alpha: 0.2),
                   blurRadius: 16,
                   offset: const Offset(0, 4),
                   spreadRadius: 0,
@@ -300,7 +300,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.white.withOpacity(0.1)
+                              ? Colors.white.withValues(alpha: 0.1)
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(60),
                         ),
@@ -552,7 +552,7 @@ class TypingIndicator extends StatelessWidget {
           width: 8,
           height: 8,
           decoration: BoxDecoration(
-            color: (isDark ? Colors.white : Colors.black87).withOpacity(opacity),
+            color: (isDark ? Colors.white : Colors.black87).withValues(alpha: opacity),
             borderRadius: BorderRadius.circular(4),
           ),
         );

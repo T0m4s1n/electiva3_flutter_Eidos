@@ -170,7 +170,7 @@ class _IconBackgroundPainter extends CustomPainter {
             fontFamily: floatingIcon.icon.fontFamily,
             package: floatingIcon.icon.fontPackage,
             fontSize: floatingIcon.size,
-            color: color.withOpacity(pulseOpacity),
+            color: color.withValues(alpha: pulseOpacity),
           ),
         ),
         textDirection: TextDirection.ltr,

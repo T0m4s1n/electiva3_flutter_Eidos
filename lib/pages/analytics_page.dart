@@ -255,7 +255,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                       Container(
                         height: h,
                         decoration: BoxDecoration(
-                          color: color.withOpacity(0.85),
+                          color: color.withValues(alpha: 0.85),
                           borderRadius: BorderRadius.circular(6),
                         ),
                       ),

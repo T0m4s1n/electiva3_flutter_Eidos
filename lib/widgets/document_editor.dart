@@ -11,7 +11,6 @@ import 'package:printing/printing.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import '../services/document_service.dart';
 import '../services/chat_service.dart';
 import '../services/hive_storage_service.dart';
@@ -396,7 +395,7 @@ class _DocumentEditorState extends State<DocumentEditor> with SingleTickerProvid
       }
       
       final supabase = Supabase.instance.client;
-      final path = '$userId/documents/${_currentDocumentId}.pdf';
+      final path = '$userId/documents/$_currentDocumentId.pdf';
       
       Uint8List? pdfBytes;
       
@@ -738,7 +737,9 @@ class _DocumentEditorState extends State<DocumentEditor> with SingleTickerProvid
       onPopInvokedWithResult: (bool didPop, dynamic result) async {
         if (!didPop && _hasChanges) {
           final bool shouldPop = await _onWillPop();
-          if (shouldPop && mounted) Navigator.of(context).pop();
+          if (shouldPop && mounted && context.mounted) {
+            Navigator.of(context).pop();
+          }
         }
       },
       child: Scaffold(
@@ -748,7 +749,7 @@ class _DocumentEditorState extends State<DocumentEditor> with SingleTickerProvid
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           elevation: 0,
           leading: IconButton(icon: const Icon(Icons.arrow_back),
-            onPressed: () async { final bool canPop = await _onWillPop(); if (canPop && mounted) Navigator.of(context).pop(); }),
+            onPressed: () async { final bool canPop = await _onWillPop(); if (canPop && mounted && context.mounted) Navigator.of(context).pop(); }),
           title: Text(widget.documentTitle,
             style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
           actions: [
@@ -1321,19 +1322,19 @@ IMPORTANT:
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: isDark 
-                  ? Colors.grey[900]!.withOpacity(0.7)
-                  : Colors.white.withOpacity(0.7),
+                  ? Colors.grey[900]!.withValues(alpha: 0.7)
+                  : Colors.white.withValues(alpha: 0.7),
                 border: Border(
                   top: BorderSide(
                     color: isDark 
-                      ? Colors.grey[700]!.withOpacity(0.5)
-                      : Colors.grey[300]!.withOpacity(0.5),
+                      ? Colors.grey[700]!.withValues(alpha: 0.5)
+                      : Colors.grey[300]!.withValues(alpha: 0.5),
                     width: 1,
                   ),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 10,
                     offset: const Offset(0, -2),
                   ),
@@ -1391,8 +1392,8 @@ IMPORTANT:
                           ),
                           filled: true,
                           fillColor: isDark 
-                            ? Colors.grey[800]!.withOpacity(0.5)
-                            : Colors.white.withOpacity(0.5),
+                            ? Colors.grey[800]!.withValues(alpha: 0.5)
+                            : Colors.white.withValues(alpha: 0.5),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide(color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
@@ -1652,10 +1653,10 @@ IMPORTANT:
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
+              color: Colors.green.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: Colors.green.withOpacity(0.5),
+                color: Colors.green.withValues(alpha: 0.5),
                 width: 2,
               ),
             ),
@@ -1718,7 +1719,7 @@ IMPORTANT:
           child: Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.2),
+              color: Colors.green.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(4),
             ),
             child: const Icon(Icons.check, size: 14, color: Colors.green),
@@ -1730,7 +1731,7 @@ IMPORTANT:
           child: Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.2),
+              color: Colors.red.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(4),
             ),
             child: const Icon(Icons.close, size: 14, color: Colors.red),
@@ -1873,12 +1874,12 @@ IMPORTANT:
                                         padding: const EdgeInsets.all(8),
                                         decoration: BoxDecoration(
                                           color: isDark 
-                                            ? Colors.blue[900]!.withOpacity(0.3)
+                                            ? Colors.blue[900]!.withValues(alpha: 0.3)
                                             : Colors.blue[50],
                                           borderRadius: BorderRadius.circular(8),
                                           border: Border.all(
                                             color: isDark 
-                                              ? Colors.blue[700]!.withOpacity(0.5)
+                                              ? Colors.blue[700]!.withValues(alpha: 0.5)
                                               : Colors.blue[200]!,
                                             width: 1,
                                           ),

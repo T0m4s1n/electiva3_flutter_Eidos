@@ -252,7 +252,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white.withOpacity(0.25)
+                      ? Colors.white.withValues(alpha: 0.25)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(90),
                 ),
@@ -329,7 +329,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -344,7 +344,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white.withOpacity(0.1)
+                    ? Colors.white.withValues(alpha: 0.1)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
               ),

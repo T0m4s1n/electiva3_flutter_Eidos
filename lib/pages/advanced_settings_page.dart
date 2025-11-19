@@ -150,7 +150,7 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
       ),
     );
 
-    if (confirmed == true) {
+    if (confirmed == true && mounted) {
       // Clear cache logic here
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -178,15 +178,17 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
         await HiveStorageService.saveMaxTokens(_maxTokens);
         await HiveStorageService.saveMaxTokensScope(_applyToAllChats);
         
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Settings saved successfully',
-              style: TextStyle(fontFamily: 'Poppins'),
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Settings saved successfully',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+              duration: Duration(seconds: 1),
             ),
-            duration: Duration(seconds: 1),
-          ),
-        );
+          );
+        }
         
         // Navigate back to preferences after a short delay
         await Future.delayed(const Duration(milliseconds: 500));
@@ -198,15 +200,17 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
         await HiveStorageService.saveMaxTokens(_maxTokens);
         await HiveStorageService.saveMaxTokensScope(_applyToAllChats);
         
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Settings saved locally (login to sync)',
-              style: TextStyle(fontFamily: 'Poppins'),
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Settings saved locally (login to sync)',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+              duration: Duration(seconds: 1),
             ),
-            duration: Duration(seconds: 1),
-          ),
-        );
+          );
+        }
         
         // Navigate back to preferences after a short delay
         await Future.delayed(const Duration(milliseconds: 500));
@@ -219,15 +223,17 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
       await HiveStorageService.saveMaxTokens(_maxTokens);
       await HiveStorageService.saveMaxTokensScope(_applyToAllChats);
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Error saving to cloud: $e. Saved locally.',
-            style: const TextStyle(fontFamily: 'Poppins'),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error saving to cloud: $e. Saved locally.',
+              style: const TextStyle(fontFamily: 'Poppins'),
+            ),
+            duration: const Duration(seconds: 1),
           ),
-          duration: const Duration(seconds: 1),
-        ),
-      );
+        );
+      }
       
       // Navigate back to preferences even on error
       await Future.delayed(const Duration(milliseconds: 500));
@@ -360,7 +366,7 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
@@ -415,7 +421,7 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
@@ -438,7 +444,7 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -546,7 +552,7 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
+                  color: Colors.blue.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
@@ -725,7 +731,7 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, size: 20, color: color),

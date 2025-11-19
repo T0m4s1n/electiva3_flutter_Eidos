@@ -431,7 +431,7 @@ class PreferencesPage extends StatelessWidget {
             style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 14,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
             ),
           ),
           const SizedBox(height: 16),
@@ -490,7 +490,9 @@ class PreferencesPage extends StatelessWidget {
                   }
                   
                   // Show dialog to enter password for passkey registration
-                  _showRegisterPasskeyDialog(context, authController);
+                  if (context.mounted) {
+                    _showRegisterPasskeyDialog(context, authController);
+                  }
                 } catch (e) {
                   Get.snackbar(
                     'Error',
@@ -567,7 +569,7 @@ class PreferencesPage extends StatelessWidget {
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 14,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
               ),
               const SizedBox(height: 20),
@@ -682,7 +684,7 @@ class PreferencesPage extends StatelessWidget {
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 14,
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                       ),
                     )
                   else
@@ -1550,39 +1552,24 @@ class PreferencesPage extends StatelessWidget {
                 maxLines: 3,
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: RadioListTile<bool>(
-                      title: Text(
-                        'Should do',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 14,
-                          color: Colors.green,
-                        ),
-                      ),
-                      value: true,
-                      groupValue: isPositive,
-                      onChanged: (value) => setState(() => isPositive = value!),
-                    ),
+              // Note: RadioListTile groupValue/onChanged are deprecated in favor of RadioGroup,
+              // but RadioGroup is not yet available in current Flutter SDK version.
+              // Using SegmentedButton as an alternative that provides similar functionality.
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment<bool>(
+                    value: true,
+                    label: Text('Should do', style: TextStyle(fontFamily: 'Poppins', fontSize: 14)),
                   ),
-                  Expanded(
-                    child: RadioListTile<bool>(
-                      title: Text(
-                        'Should not do',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 14,
-                          color: Colors.red,
-                        ),
-                      ),
-                      value: false,
-                      groupValue: isPositive,
-                      onChanged: (value) => setState(() => isPositive = value!),
-                    ),
+                  ButtonSegment<bool>(
+                    value: false,
+                    label: Text('Should not do', style: TextStyle(fontFamily: 'Poppins', fontSize: 14)),
                   ),
                 ],
+                selected: {isPositive},
+                onSelectionChanged: (Set<bool> newSelection) {
+                  setState(() => isPositive = newSelection.first);
+                },
               ),
             ],
           ),
@@ -1607,7 +1594,9 @@ class PreferencesPage extends StatelessWidget {
                     textController.text.trim(),
                     isPositive,
                   );
-                  Navigator.of(context).pop();
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -1669,39 +1658,24 @@ class PreferencesPage extends StatelessWidget {
                 maxLines: 3,
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: RadioListTile<bool>(
-                      title: Text(
-                        'Should do',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 14,
-                          color: Colors.green,
-                        ),
-                      ),
-                      value: true,
-                      groupValue: isPositive,
-                      onChanged: (value) => setState(() => isPositive = value!),
-                    ),
+              // Note: RadioListTile groupValue/onChanged are deprecated in favor of RadioGroup,
+              // but RadioGroup is not yet available in current Flutter SDK version.
+              // Using SegmentedButton as an alternative that provides similar functionality.
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment<bool>(
+                    value: true,
+                    label: Text('Should do', style: TextStyle(fontFamily: 'Poppins', fontSize: 14)),
                   ),
-                  Expanded(
-                    child: RadioListTile<bool>(
-                      title: Text(
-                        'Should not do',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 14,
-                          color: Colors.red,
-                        ),
-                      ),
-                      value: false,
-                      groupValue: isPositive,
-                      onChanged: (value) => setState(() => isPositive = value!),
-                    ),
+                  ButtonSegment<bool>(
+                    value: false,
+                    label: Text('Should not do', style: TextStyle(fontFamily: 'Poppins', fontSize: 14)),
                   ),
                 ],
+                selected: {isPositive},
+                onSelectionChanged: (Set<bool> newSelection) {
+                  setState(() => isPositive = newSelection.first);
+                },
               ),
             ],
           ),
@@ -1727,7 +1701,9 @@ class PreferencesPage extends StatelessWidget {
                     textController.text.trim(),
                     isPositive,
                   );
-                  Navigator.of(context).pop();
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -1789,7 +1765,9 @@ class PreferencesPage extends StatelessWidget {
             () => ElevatedButton(
             onPressed: () async {
               await Get.find<PreferencesController>().deleteChatRule(rule.id);
-              Navigator.of(context).pop();
+              if (context.mounted) {
+                Navigator.of(context).pop();
+              }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: Text(
@@ -1944,7 +1922,7 @@ class PreferencesPage extends StatelessWidget {
             const SizedBox(height: 8),
             Obx(
               () => DropdownButtonFormField<String>(
-                value: preferencesController.defaultDocumentFormat.value,
+                initialValue: preferencesController.defaultDocumentFormat.value,
                 decoration: InputDecoration(
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),

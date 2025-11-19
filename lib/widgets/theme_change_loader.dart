@@ -88,8 +88,8 @@ class _ThemeChangeLoaderState extends State<ThemeChangeLoader>
                         width: double.infinity,
                         height: double.infinity,
                         color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.black.withOpacity(0.7)
-                            : Colors.white.withOpacity(0.7),
+                            ? Colors.black.withValues(alpha: 0.7)
+                            : Colors.white.withValues(alpha: 0.7),
                       ),
                     ),
                     // Additional opaque layer for better coverage
@@ -97,8 +97,8 @@ class _ThemeChangeLoaderState extends State<ThemeChangeLoader>
                       width: double.infinity,
                       height: double.infinity,
                       color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.black.withOpacity(0.3)
-                          : Colors.white.withOpacity(0.3),
+                          ? Colors.black.withValues(alpha: 0.3)
+                          : Colors.white.withValues(alpha: 0.3),
                     ),
                     // Centered icon
                     Center(
@@ -109,13 +109,13 @@ class _ThemeChangeLoaderState extends State<ThemeChangeLoader>
                           height: 120,
                           decoration: BoxDecoration(
                             color: Theme.of(context).brightness == Brightness.dark
-                                ? Colors.white.withOpacity(0.15)
-                                : Colors.black.withOpacity(0.08),
+                                ? Colors.white.withValues(alpha: 0.15)
+                                : Colors.black.withValues(alpha: 0.08),
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: Theme.of(context).brightness == Brightness.dark
-                                  ? Colors.white.withOpacity(0.2)
-                                  : Colors.black.withOpacity(0.15),
+                                  ? Colors.white.withValues(alpha: 0.2)
+                                  : Colors.black.withValues(alpha: 0.15),
                               width: 2,
                             ),
                           ),

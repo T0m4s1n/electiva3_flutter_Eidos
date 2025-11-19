@@ -596,130 +596,6 @@ Ejemplo: "Haz un recordatorio para revisar este documento en 1 hora"''',
     }
   }
 
-  /// Get AI response with reminder context
-  Future<void> _getAIResponseWithReminderContext(String reminderContext, String userMessage) async {
-    if (openaiKey == null) {
-      _showErrorSnackbar('OpenAI API key not configured');
-      return;
-    }
-
-    try {
-      isTyping.value = true;
-
-      // Clear system error messages
-      await ChatService.clearSystemErrorMessages(currentConversationId.value);
-
-      // Get conversation context
-      final List<Map<String, dynamic>> formattedMessages = messages
-          .map(
-            (MessageLocal msg) => {
-              'id': msg.id,
-              'role': msg.role,
-              'content': msg.content,
-              'created_at': msg.createdAt,
-              'seq': msg.seq,
-            },
-          )
-          .toList();
-
-      // Build messages for OpenAI with reminder context
-      final List<Map<String, String>> openaiMessages = [
-        {
-          'role': 'system',
-          'content': 'You are a helpful AI assistant. When a reminder has been created, acknowledge it and let the user know when they will receive the notification. Be concise and friendly.',
-        },
-        {
-          'role': 'system',
-          'content': reminderContext,
-        },
-        ...formattedMessages.map((msg) {
-          final content = msg['content'];
-          String textContent = '';
-          if (content is Map) {
-            textContent = content['text'] as String? ?? content.toString();
-          } else {
-            textContent = content.toString();
-          }
-
-          return {
-            'role': msg['role'] as String,
-            'content': _cleanMessageContent(textContent),
-          };
-        }),
-        {
-          'role': 'user',
-          'content': _cleanMessageContent(userMessage),
-        },
-      ];
-
-      // Filter valid messages
-      final List<Map<String, String>> validMessages = openaiMessages
-          .where(
-            (msg) =>
-                msg['content'] != null &&
-                msg['content']!.isNotEmpty &&
-                msg['content']!.length <= 4000,
-          )
-          .toList();
-
-      // Call OpenAI API
-      debugPrint('Calling OpenAI API with reminder context');
-      final String aiResponse = await _callOpenAIAPI(validMessages);
-
-      // Validate the response
-      if (aiResponse.isEmpty || aiResponse.trim().isEmpty || aiResponse == '0') {
-        throw Exception('Invalid or empty response from AI');
-      }
-
-      final MessageLocal aiMessage = await ChatService.createAssistantMessage(
-        conversationId: currentConversationId.value,
-        text: aiResponse,
-      );
-
-      messages.add(aiMessage);
-      
-      // Check if stopped before continuing
-      if (_isStopped) {
-        debugPrint('Generation was stopped, not adding message');
-        return;
-      }
-      
-      await Future.delayed(const Duration(milliseconds: 200));
-      
-      // Final check before scrolling
-      if (_isStopped) {
-        return;
-      }
-      
-      _scrollToBottom();
-    } catch (e) {
-      debugPrint('Error getting AI response with reminder context: $e');
-      
-      // Don't show error message if it was stopped by user
-      if (_isStopped) {
-        debugPrint('Generation was stopped, skipping error message');
-        return; // Exit early if stopped
-      } else {
-        final MessageLocal errorMessage = await ChatService.createSystemMessage(
-          conversationId: currentConversationId.value,
-          text: 'Sorry, I encountered an error. Please try again.',
-        );
-        messages.add(errorMessage);
-        _scrollToBottom();
-      }
-    } finally {
-      isTyping.value = false;
-      // Don't reset _isStopped here if it was set by stopGeneration
-      // It will be reset by stopGeneration after cleanup
-      if (!_isStopped) {
-        _isStopped = false;
-      }
-      _currentRequest = null;
-      _currentHttpClient = null;
-      _currentStreamSubscription = null;
-      _currentGenerationCompleter = null;
-    }
-  }
 
   /// Get AI response from OpenAI
   Future<void> _getAIResponse(String userMessage) async {
@@ -1164,7 +1040,7 @@ Ejemplo: "Haz un recordatorio para revisar este documento en 1 hora"''',
 
       // Read response body with cancellation checks
       final StringBuffer responseBuffer = StringBuffer();
-      final StreamCompleter = Completer<void>();
+      final streamCompleter = Completer<void>();
       bool isStoppedDuringRead = false;
       
       _currentStreamSubscription = response.transform(utf8.decoder).listen(
@@ -1173,24 +1049,24 @@ Ejemplo: "Haz un recordatorio para revisar este documento en 1 hora"''',
           if (_isStopped) {
             isStoppedDuringRead = true;
             _currentStreamSubscription?.cancel();
-            if (!StreamCompleter.isCompleted) {
-              StreamCompleter.completeError('Generation stopped by user');
+            if (!streamCompleter.isCompleted) {
+              streamCompleter.completeError('Generation stopped by user');
             }
             return;
           }
           responseBuffer.write(data);
         },
         onDone: () {
-          if (!StreamCompleter.isCompleted && !_isStopped) {
-            StreamCompleter.complete();
+          if (!streamCompleter.isCompleted && !_isStopped) {
+            streamCompleter.complete();
           }
         },
         onError: (error) {
-          if (!StreamCompleter.isCompleted) {
+          if (!streamCompleter.isCompleted) {
             if (_isStopped) {
-              StreamCompleter.completeError('Generation stopped by user');
+              streamCompleter.completeError('Generation stopped by user');
             } else {
-              StreamCompleter.completeError(error);
+              streamCompleter.completeError(error);
             }
           }
         },
@@ -1199,7 +1075,7 @@ Ejemplo: "Haz un recordatorio para revisar este documento en 1 hora"''',
       
       // Wait for stream to complete, but check for cancellation
       try {
-        await StreamCompleter.future;
+        await streamCompleter.future;
       } catch (e) {
         if (_isStopped || isStoppedDuringRead) {
           _currentStreamSubscription?.cancel();
@@ -1222,7 +1098,7 @@ Ejemplo: "Haz un recordatorio para revisar este documento en 1 hora"''',
       final String responseBody = responseBuffer.toString();
 
       debugPrint('OpenAI API Response Status: ${response.statusCode}');
-      debugPrint('OpenAI API Response Body: ${responseBody.length > 200 ? responseBody.substring(0, 200) + "..." : responseBody}');
+      debugPrint('OpenAI API Response Body: ${responseBody.length > 200 ? "${responseBody.substring(0, 200)}..." : responseBody}');
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(responseBody);
@@ -2171,7 +2047,7 @@ Make it comprehensive and ready to use with proper markdown formatting. Only inc
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: Colors.green.withOpacity(0.2),
+                                  color: Colors.green.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: const Text(
@@ -2190,7 +2066,7 @@ Make it comprehensive and ready to use with proper markdown formatting. Only inc
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: Colors.blue.withOpacity(0.2),
+                                  color: Colors.blue.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: const Text(
