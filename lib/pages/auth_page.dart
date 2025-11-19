@@ -538,9 +538,9 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                                 return;
                                               }
                                               
-                                              // Debounce: Wait for user to stop typing (2 seconds)
+                                              // Debounce: Wait for user to stop typing (800ms)
                                               final trimmedValue = value.trim();
-                                              _debounceTimer = Timer(const Duration(milliseconds: 2000), () {
+                                              _debounceTimer = Timer(const Duration(milliseconds: 800), () {
                                                 // Double-check that email is still valid and matches
                                                 if (!mounted) return;
                                                 
