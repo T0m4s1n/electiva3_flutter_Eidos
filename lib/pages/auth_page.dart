@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:lottie/lottie.dart';
@@ -80,6 +81,8 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
   String? _selectedLoginMethod; // 'password' or 'passkey'
   String? _detectedProfilePicUrl; // Profile picture URL when email is detected
   String? _detectedUserName; // User name when email is detected
+  Timer? _debounceTimer; // Timer for debouncing email validation
+  String? _lastCheckedEmail; // Track last checked email to avoid duplicate checks
 
   @override
   void initState() {
@@ -153,10 +156,20 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
 
     _fadeController.forward();
     _slideController.forward();
+    
+    // Trigger profile pic animation on init if it's login mode (to show "?" circle)
+    if (widget.isLogin) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _profilePicController.forward();
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _fadeController.dispose();
     _slideController.dispose();
     _profilePicController.dispose();
@@ -241,7 +254,24 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                   ),
                                 ),
 
-                                const SizedBox(height: 40),
+                                const SizedBox(height: 20),
+
+                                // Lottie animation (trucutrucu.json)
+                                FadeTransition(
+                                  opacity: _fadeAnimation,
+                                  child: Center(
+                                    child: SizedBox(
+                                      width: 120,
+                                      height: 120,
+                                      child: Lottie.asset(
+                                        'assets/fonts/svgs/trucutrucu.json',
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: 20),
 
                                 // Auth form
                                 SlideTransition(
@@ -358,8 +388,8 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
 
                                           const SizedBox(height: 32),
 
-                                          // Profile picture (shown when email is detected)
-                                          if (widget.isLogin && _detectedProfilePicUrl != null) ...[
+                                          // Profile picture circle (always shown in login mode, changes when user detected)
+                                          if (widget.isLogin) ...[
                                             Center(
                                               child: AnimatedBuilder(
                                                 animation: _profilePicController,
@@ -375,39 +405,63 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                                         scale: _profilePicScaleAnimation.value,
                                                         child: Column(
                                                           children: [
-                                                            Container(
-                                                              width: 80,
-                                                              height: 80,
-                                                              decoration: BoxDecoration(
-                                                                shape: BoxShape.circle,
-                                                                border: Border.all(
-                                                                  color: Colors.black87,
-                                                                  width: 2,
-                                                                ),
-                                                                boxShadow: [
-                                                                  BoxShadow(
-                                                                    color: Colors.black.withValues(alpha: 0.1),
-                                                                    blurRadius: 8,
-                                                                    offset: const Offset(0, 2),
+                                                            AnimatedSwitcher(
+                                                              duration: const Duration(milliseconds: 300),
+                                                              transitionBuilder: (Widget child, Animation<double> animation) {
+                                                                return FadeTransition(
+                                                                  opacity: animation,
+                                                                  child: ScaleTransition(
+                                                                    scale: animation,
+                                                                    child: child,
                                                                   ),
-                                                                ],
-                                                              ),
-                                                              child: ClipRRect(
-                                                                borderRadius: BorderRadius.circular(40),
-                                                                child: Image.network(
-                                                                  _detectedProfilePicUrl!,
-                                                                  fit: BoxFit.cover,
-                                                                  errorBuilder: (context, error, stackTrace) {
-                                                                    return Container(
-                                                                      color: Colors.grey[200],
-                                                                      child: Icon(
-                                                                        Icons.person,
-                                                                        size: 40,
-                                                                        color: Colors.grey[600],
-                                                                      ),
-                                                                    );
-                                                                  },
+                                                                );
+                                                              },
+                                                              child: Container(
+                                                                key: ValueKey(_detectedProfilePicUrl ?? 'default'),
+                                                                width: 80,
+                                                                height: 80,
+                                                                decoration: BoxDecoration(
+                                                                  shape: BoxShape.circle,
+                                                                  border: Border.all(
+                                                                    color: Colors.black87,
+                                                                    width: 2,
+                                                                  ),
+                                                                  color: _detectedProfilePicUrl == null 
+                                                                      ? Colors.grey[200] 
+                                                                      : Colors.transparent,
+                                                                  boxShadow: [
+                                                                    BoxShadow(
+                                                                      color: Colors.black.withValues(alpha: 0.1),
+                                                                      blurRadius: 8,
+                                                                      offset: const Offset(0, 2),
+                                                                    ),
+                                                                  ],
                                                                 ),
+                                                                child: _detectedProfilePicUrl != null
+                                                                    ? ClipRRect(
+                                                                        borderRadius: BorderRadius.circular(40),
+                                                                        child: Image.network(
+                                                                          _detectedProfilePicUrl!,
+                                                                          fit: BoxFit.cover,
+                                                                          errorBuilder: (context, error, stackTrace) {
+                                                                            return Container(
+                                                                              color: Colors.grey[200],
+                                                                              child: const Icon(
+                                                                                Icons.help_outline,
+                                                                                size: 40,
+                                                                                color: Colors.grey,
+                                                                              ),
+                                                                            );
+                                                                          },
+                                                                        ),
+                                                                      )
+                                                                    : const Center(
+                                                                        child: Icon(
+                                                                          Icons.help_outline,
+                                                                          size: 40,
+                                                                          color: Colors.grey,
+                                                                        ),
+                                                                      ),
                                                               ),
                                                             ),
                                                             if (_detectedUserName != null && _detectedUserName!.isNotEmpty) ...[
@@ -451,9 +505,11 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                             keyboardType:
                                                 TextInputType.emailAddress,
                                             onChanged: widget.isLogin ? (value) {
+                                              // Cancel any pending debounce timer
+                                              _debounceTimer?.cancel();
+                                              
                                               // Reset validation state when email changes
                                               if (_emailValidated) {
-                                                _profilePicController.reset();
                                                 setState(() {
                                                   _emailValidated = false;
                                                   _hasPasskey = false;
@@ -461,49 +517,81 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
                                                   _checkingPasskey = false;
                                                   _detectedProfilePicUrl = null;
                                                   _detectedUserName = null;
+                                                  _lastCheckedEmail = null;
                                                 });
+                                                _profilePicController.reset();
+                                                _profilePicController.forward();
                                               }
                                               
-                                              // Auto-check for passkey when email is valid (debounced)
-                                              if (value.isNotEmpty && RegExp(
+                                              // Clear profile pic immediately if email is invalid
+                                              if (value.isEmpty || !RegExp(
                                                 r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
                                               ).hasMatch(value)) {
-                                                // Debounce the check to avoid too many API calls
-                                                Future.delayed(const Duration(milliseconds: 500), () {
-                                                  if (mounted && 
-                                                      _emailController.text == value && 
-                                                      !_emailValidated &&
-                                                      RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                                                    _checkPasskeyForEmail(value.trim());
-                                                    _fetchProfileByEmail(value.trim());
-                                                  }
-                                                });
-                                              } else {
-                                                // Clear profile pic if email is invalid
                                                 if (mounted) {
-                                                  _profilePicController.reset();
                                                   setState(() {
                                                     _detectedProfilePicUrl = null;
                                                     _detectedUserName = null;
                                                   });
+                                                  _profilePicController.reset();
+                                                  _profilePicController.forward();
                                                 }
+                                                return;
                                               }
+                                              
+                                              // Debounce: Wait for user to stop typing (800ms)
+                                              final trimmedValue = value.trim();
+                                              _debounceTimer = Timer(const Duration(milliseconds: 800), () {
+                                                // Double-check that email is still valid and matches
+                                                if (!mounted) return;
+                                                
+                                                final currentEmail = _emailController.text.trim();
+                                                if (currentEmail != trimmedValue) {
+                                                  // Email changed during debounce, ignore this check
+                                                  return;
+                                                }
+                                                
+                                                // Validate email format again
+                                                if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(currentEmail)) {
+                                                  return;
+                                                }
+                                                
+                                                // Check if we already checked this email
+                                                if (_lastCheckedEmail == currentEmail && _emailValidated) {
+                                                  return;
+                                                }
+                                                
+                                                // Update last checked email
+                                                _lastCheckedEmail = currentEmail;
+                                                
+                                                // Check for passkey and profile
+                                                _checkPasskeyForEmail(currentEmail);
+                                                _fetchProfileByEmail(currentEmail);
+                                              });
                                             } : null,
                                             onFieldSubmitted: widget.isLogin ? (value) {
-                                              // When email is submitted, check for passkey if valid
-                                              if (value.isNotEmpty && RegExp(
+                                              // Cancel debounce timer when user submits
+                                              _debounceTimer?.cancel();
+                                              
+                                              // When email is submitted, check immediately if valid
+                                              final trimmedValue = value.trim();
+                                              if (trimmedValue.isNotEmpty && RegExp(
                                                 r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                                              ).hasMatch(value)) {
-                                                _checkPasskeyForEmail(value.trim());
-                                                _fetchProfileByEmail(value.trim());
+                                              ).hasMatch(trimmedValue)) {
+                                                _lastCheckedEmail = trimmedValue;
+                                                _checkPasskeyForEmail(trimmedValue);
+                                                _fetchProfileByEmail(trimmedValue);
                                               }
                                             } : null,
                                             onEditingComplete: widget.isLogin ? () {
-                                              // Also check when field loses focus
+                                              // Cancel debounce timer when field loses focus
+                                              _debounceTimer?.cancel();
+                                              
+                                              // Check when field loses focus if not already checked
                                               final email = _emailController.text.trim();
-                                              if (email.isNotEmpty && RegExp(
-                                                r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                                              ).hasMatch(email) && !_emailValidated) {
+                                              if (email.isNotEmpty && 
+                                                  RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email) &&
+                                                  _lastCheckedEmail != email) {
+                                                _lastCheckedEmail = email;
                                                 _checkPasskeyForEmail(email);
                                                 _fetchProfileByEmail(email);
                                               }
@@ -1233,7 +1321,7 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
     }
 
   Future<void> _checkPasskeyForEmail(String email) async {
-    // Prevent duplicate checks
+    // Prevent duplicate checks for the same email
     if (_checkingPasskey || !mounted || email.isEmpty) return;
     
     // Validate email format first
@@ -1241,7 +1329,16 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
       return;
     }
     
+    // Don't check if this is the same email we already checked
+    if (_lastCheckedEmail == email && _emailValidated) {
+      debugPrint('⏭️ Skipping duplicate passkey check for email: $email');
+      return;
+    }
+    
     debugPrint('🔍 Checking for passkey for email: $email');
+    
+    // Store the email we're checking to prevent duplicate calls
+    final checkingEmail = email;
     
     if (mounted) {
       setState(() {
@@ -1251,32 +1348,39 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
 
     try {
       // Check if user exists and has passkey
-      debugPrint('📧 Calling hasPasskeysForEmail for: $email');
-      final hasPasskey = await passkey.PasskeyService.hasPasskeysForEmail(email);
-      debugPrint('✅ Passkey check result for $email: $hasPasskey');
+      debugPrint('📧 Calling hasPasskeysForEmail for: $checkingEmail');
+      final hasPasskey = await passkey.PasskeyService.hasPasskeysForEmail(checkingEmail);
+      debugPrint('✅ Passkey check result for $checkingEmail: $hasPasskey');
       
-      if (mounted) {
+      // Only update state if this is still the current email being checked
+      if (mounted && _emailController.text.trim() == checkingEmail) {
         setState(() {
           _emailValidated = true;
           _hasPasskey = hasPasskey;
+          _lastCheckedEmail = checkingEmail;
           // If user has passkey, don't auto-select method (let user choose)
           // If no passkey, default to password
           if (!hasPasskey) {
             _selectedLoginMethod = 'password';
           }
         });
+      } else if (mounted) {
+        // Email changed during check, ignore result
+        debugPrint('⚠️ Email changed during passkey check, ignoring result');
       }
     } catch (e, stackTrace) {
-      debugPrint('❌ Error checking passkey for $email: $e');
+      debugPrint('❌ Error checking passkey for $checkingEmail: $e');
       debugPrint('Stack trace: $stackTrace');
       
-      // If error checking, assume no passkey and default to password
-      // This could be because user doesn't exist or has no passkey
-      if (mounted) {
+      // Only update state if this is still the current email being checked
+      if (mounted && _emailController.text.trim() == checkingEmail) {
+        // If error checking, assume no passkey and default to password
+        // This could be because user doesn't exist or has no passkey
         setState(() {
           _emailValidated = true;
           _hasPasskey = false;
           _selectedLoginMethod = 'password';
+          _lastCheckedEmail = checkingEmail;
         });
       }
     } finally {
@@ -1296,11 +1400,20 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
       return;
     }
 
+    // Store the email we're fetching to prevent showing stale data
+    final fetchingEmail = email;
+
     try {
       final AuthController authController = Get.find<AuthController>();
-      final profile = await authController.getUserProfileByEmail(email);
+      final profile = await authController.getUserProfileByEmail(fetchingEmail);
       
-      if (mounted && profile != null) {
+      // Only update state if this is still the current email
+      if (!mounted || _emailController.text.trim() != fetchingEmail) {
+        debugPrint('⚠️ Email changed during profile fetch, ignoring result');
+        return;
+      }
+      
+      if (profile != null) {
         setState(() {
           _detectedProfilePicUrl = profile['avatar_url'] as String?;
           _detectedUserName = profile['full_name'] as String?;
@@ -1308,17 +1421,22 @@ class _AuthViewState extends State<AuthView> with TickerProviderStateMixin {
         // Trigger animation when profile picture is loaded
         _profilePicController.reset();
         _profilePicController.forward();
-        debugPrint('✅ Profile picture loaded for email: $email');
-      } else if (mounted) {
-        // User doesn't exist or has no profile
+        debugPrint('✅ Profile picture loaded for email: $fetchingEmail');
+      } else {
+        // User doesn't exist or has no profile - show "?" circle
         setState(() {
           _detectedProfilePicUrl = null;
           _detectedUserName = null;
         });
+        // Trigger animation even when no profile pic to show "?" circle
+        _profilePicController.reset();
+        _profilePicController.forward();
+        debugPrint('❌ No profile picture found for email: $fetchingEmail - showing "?" circle');
       }
     } catch (e) {
       debugPrint('❌ Error fetching profile by email: $e');
-      if (mounted) {
+      // Only update state if this is still the current email
+      if (mounted && _emailController.text.trim() == fetchingEmail) {
         setState(() {
           _detectedProfilePicUrl = null;
           _detectedUserName = null;
