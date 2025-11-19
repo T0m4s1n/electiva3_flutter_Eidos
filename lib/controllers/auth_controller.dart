@@ -46,9 +46,11 @@ class AuthController extends GetxController {
 
   Future<void> completeOnboarding() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('has_seen_onboarding', true);
-      hasSeenOnboarding.value = true;
+      // DEBUG: Don't save onboarding status for debugging
+      // final prefs = await SharedPreferences.getInstance();
+      // await prefs.setBool('has_seen_onboarding', true);
+      // hasSeenOnboarding.value = true;
+      debugPrint('DEBUG: Onboarding completed but not saved (debug mode)');
     } catch (e) {
       debugPrint('Error completing onboarding: $e');
     }
@@ -148,6 +150,27 @@ class AuthController extends GetxController {
         data: fullName != null ? {'full_name': fullName} : null,
         emailRedirectTo: null, // Disable email confirmation
       );
+      
+      // If registration successful and user is auto-logged in, update auth state immediately
+      if (response.user != null && response.session != null) {
+        currentUser.value = response.user;
+        isLoggedIn.value = true;
+        userEmail.value = response.user!.email ?? email;
+        _loadUserProfile();
+        
+        // Schedule sync to happen after registration completes (non-blocking)
+        Future.microtask(() async {
+          try {
+            final syncService = AuthService.syncService;
+            await syncService.onLogin(response.user!.id);
+            debugPrint('✅ Conversations synced from Supabase after registration');
+          } catch (e) {
+            debugPrint('⚠️ Error syncing conversations after registration: $e');
+            // Don't fail registration if sync fails
+          }
+        });
+      }
+      
       return response;
     } catch (e) {
       rethrow;
@@ -168,9 +191,13 @@ class AuthController extends GetxController {
         password: password,
       );
       
-      // If login successful, sync conversations from Supabase in background
-      // Don't block login - sync happens asynchronously
+      // If login successful, update auth state immediately
       if (response.user != null) {
+        currentUser.value = response.user;
+        isLoggedIn.value = true;
+        userEmail.value = response.user!.email ?? email;
+        _loadUserProfile();
+        
         // Schedule sync to happen after login completes (non-blocking)
         Future.microtask(() async {
           try {
@@ -247,6 +274,21 @@ class AuthController extends GetxController {
           .single();
       return response;
     } catch (e) {
+      return null;
+    }
+  }
+
+  // Get user profile by email (for login page, before user is logged in)
+  Future<Map<String, dynamic>?> getUserProfileByEmail(String email) async {
+    try {
+      final response = await _supabase
+          .from('profiles')
+          .select()
+          .eq('email', email)
+          .maybeSingle();
+      return response;
+    } catch (e) {
+      debugPrint('Error getting profile by email: $e');
       return null;
     }
   }
@@ -375,8 +417,14 @@ class AuthController extends GetxController {
       isLoading.value = true;
       final response = await AuthService.signInWithPasskey(email: email);
       
-      // If login successful, sync conversations from Supabase in background
+      // If login successful, update auth state immediately
       if (response.user != null) {
+        currentUser.value = response.user;
+        isLoggedIn.value = true;
+        userEmail.value = response.user!.email ?? email;
+        _loadUserProfile();
+        
+        // Sync conversations from Supabase in background
         Future.microtask(() async {
           try {
             final syncService = AuthService.syncService;

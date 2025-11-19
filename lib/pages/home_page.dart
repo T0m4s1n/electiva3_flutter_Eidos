@@ -10,7 +10,7 @@ import '../widgets/loading_screen.dart';
 import '../widgets/conversations_list.dart';
 import 'auth_page.dart';
 import 'chat_page.dart';
-import 'onboarding_page.dart';
+import 'intro_animation_page.dart';
 import '../routes/app_routes.dart';
 import '../services/chat_service.dart';
 import '../models/chat_models.dart';
@@ -102,9 +102,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, Single
 
   @override
   Widget build(BuildContext context) {
-    final AuthController authController = Get.find<AuthController>();
-    final NavigationController navController = Get.find<NavigationController>();
-    final AppController appController = Get.find<AppController>();
 
     // Hide system UI
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -117,10 +114,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, Single
       ),
     );
 
+    // Original code with Obx wrapper
     return Obx(() {
-      // Show onboarding if user hasn't seen it
+      final AuthController authController = Get.find<AuthController>();
+      final NavigationController navController = Get.find<NavigationController>();
+      final AppController appController = Get.find<AppController>();
+      
+      // Show intro animation if user hasn't seen it
       if (!authController.hasSeenOnboarding.value) {
-        return const OnboardingPage();
+        return const IntroAnimationPage();
       }
 
       // Show auth if not logged in
@@ -337,90 +339,63 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, Single
 
                   // Chat Archive button below search (with smooth animation)
                   Obx(() {
-                        if (!navController.showChatView.value) {
-                      return AnimatedBuilder(
-                        animation: _searchAnimationController,
-                        builder: (context, child) {
-                          return SlideTransition(
-                            position: Tween<Offset>(
-                              begin: Offset.zero,
-                              end: const Offset(0.0, 0.1),
-                            ).animate(
-                              CurvedAnimation(
-                                parent: _searchAnimationController,
-                                curve: Curves.easeOut,
+                    if (!navController.showChatView.value) {
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: GestureDetector(
+                          onTap: () => Get.toNamed(AppRoutes.archive),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: Theme.of(context).brightness == Brightness.dark
+                                  ? [
+                                      const Color(0xFF2C2C2C),
+                                      const Color(0xFF1E1E1E),
+                                    ]
+                                  : [
+                                      Colors.white,
+                                      Colors.grey[50]!,
+                                    ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.grey[600]!
+                                    : Colors.grey[300]!,
                               ),
                             ),
-                            child: FadeTransition(
-                              opacity: Tween<double>(
-                                begin: 1.0,
-                                end: 1.0,
-                              ).animate(
-                                CurvedAnimation(
-                                  parent: _searchAnimationController,
-                                  curve: Curves.easeOut,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.archive_outlined,
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.orange[300]
+                                      : Colors.orange[600],
+                                  size: 16,
                                 ),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                                child: GestureDetector(
-                                  onTap: () => Get.toNamed(AppRoutes.archive),
-                                  child: Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: Theme.of(context).brightness == Brightness.dark
-                                          ? [
-                                              const Color(0xFF2C2C2C),
-                                              const Color(0xFF1E1E1E),
-                                            ]
-                                          : [
-                                              Colors.white,
-                                              Colors.grey[50]!,
-                                            ],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: Theme.of(context).brightness == Brightness.dark
-                                            ? Colors.grey[600]!
-                                            : Colors.grey[300]!,
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.archive_outlined,
-                                          color: Theme.of(context).brightness == Brightness.dark
-                                              ? Colors.orange[300]
-                                              : Colors.orange[600],
-                                          size: 16,
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Obx(() => Text(
-                                          TranslationService.translate('chat_archive'),
-                                          style: TextStyle(
-                                            fontFamily: 'Poppins',
-                                            fontSize: 12,
-                                            color: Theme.of(context).brightness == Brightness.dark
-                                                ? Colors.orange[300]
-                                                : Colors.orange[600],
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        )),
-                                      ],
-                                    ),
+                                const SizedBox(width: 6),
+                                Obx(() => Text(
+                                  TranslationService.translate('chat_archive'),
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 12,
+                                    color: Theme.of(context).brightness == Brightness.dark
+                                        ? Colors.orange[300]
+                                        : Colors.orange[600],
+                                    fontWeight: FontWeight.w500,
                                   ),
-                                ),
-                              ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                )),
+                              ],
                             ),
-                          );
-                        },
+                          ),
+                        ),
                       );
                     }
                     return const SizedBox.shrink();
