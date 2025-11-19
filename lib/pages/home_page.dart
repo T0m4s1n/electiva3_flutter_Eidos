@@ -8,7 +8,6 @@ import '../controllers/chat_controller.dart';
 import '../widgets/animated_header.dart';
 import '../widgets/loading_screen.dart';
 import '../widgets/conversations_list.dart';
-import 'auth_page.dart';
 import 'chat_page.dart';
 import 'intro_animation_page.dart';
 import '../routes/app_routes.dart';
@@ -120,17 +119,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver, Single
       final NavigationController navController = Get.find<NavigationController>();
       final AppController appController = Get.find<AppController>();
       
-      // Show intro animation if user hasn't seen it
-      if (!authController.hasSeenOnboarding.value) {
+      // Show intro animation if user is not logged in (always show intro when no user)
+      if (!authController.isLoggedIn.value) {
         return const IntroAnimationPage();
       }
 
-      // Show auth if not logged in
-      if (!authController.isLoggedIn.value) {
-        return Scaffold(
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          body: const AuthPage(),
-        );
+      // Show intro animation if user hasn't seen it (for logged-in users who haven't seen it)
+      if (!authController.hasSeenOnboarding.value) {
+        return const IntroAnimationPage();
       }
 
       // Show loading screen if initial loading
