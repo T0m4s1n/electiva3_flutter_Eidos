@@ -458,6 +458,78 @@ class DocumentService {
     }
   }
 
+  /// Create initial version 1.0 for a document if it doesn't exist
+  static Future<void> createInitialVersion1IfNeeded(String documentId) async {
+    try {
+      // Check if version 1.0 already exists
+      final existingVersions = await getDocumentVersions(documentId);
+      final hasVersion1 = existingVersions.any((v) => (v['version_number'] as int? ?? 0) == 1);
+      
+      if (hasVersion1) {
+        debugPrint('DocumentService: Version 1.0 already exists for document $documentId');
+        return;
+      }
+      
+      // Get the document content
+      final doc = await getDocument(documentId);
+      if (doc == null) {
+        debugPrint('DocumentService: Document not found for ID $documentId');
+        return;
+      }
+      
+      final content = doc['content'] as String? ?? '';
+      if (content.isEmpty) {
+        debugPrint('DocumentService: Document content is empty, skipping version 1.0 creation');
+        return;
+      }
+      
+      final String? userId = AuthService.currentUser?.id;
+      final versionId = IdGenerator.generateConversationId();
+      final String now = DateTime.now().toUtc().toIso8601String();
+      
+      // Save version 1.0 locally
+      await _saveVersionLocally(
+        versionId: versionId,
+        documentId: documentId,
+        content: content,
+        versionNumber: 1,
+        userId: userId,
+        changeSummary: 'Initial version 1.0',
+      );
+      
+      // Try to save to Supabase if user is authenticated
+      if (userId != null && userId.isNotEmpty) {
+        try {
+          await _supabase.from('document_versions').insert({
+            'id': versionId,
+            'document_id': documentId,
+            'user_id': userId,
+            'content': content,
+            'version_number': 1,
+            'created_at': now,
+            'created_by': userId,
+            'change_summary': 'Initial version 1.0',
+          });
+          
+          // Upload version to storage
+          await _uploadToStorage(
+            userId: userId,
+            documentId: documentId,
+            content: content,
+            version: 1,
+          );
+          
+          debugPrint('DocumentService: Created initial version 1.0 for document $documentId');
+        } catch (e) {
+          debugPrint('DocumentService: Failed to save version 1.0 to Supabase: $e');
+          // Continue even if Supabase fails - local version is saved
+        }
+      }
+    } catch (e) {
+      debugPrint('DocumentService: Error creating initial version 1.0: $e');
+    }
+  }
+
   /// Get document versions (from both Supabase and local storage)
   static Future<List<Map<String, dynamic>>> getDocumentVersions(
     String documentId,

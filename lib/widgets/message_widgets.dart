@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'dart:async';
 import '../models/chat_models.dart';
 import '../controllers/auth_controller.dart';
+import '../controllers/chat_controller.dart';
 import '../services/translation_service.dart';
 
 class MessageBubble extends StatefulWidget {
@@ -28,21 +29,45 @@ class _MessageBubbleState extends State<MessageBubble> {
   String _displayText = '';
   Timer? _typingTimer;
   int _currentIndex = 0;
+  late ChatController _chatController;
+  Worker? _animationStopWorker;
 
   @override
   void initState() {
     super.initState();
+    _chatController = Get.find<ChatController>();
+    
     if (!widget.isUser && widget.animateTyping) {
       _startTypingAnimation();
     } else {
       _displayText = _getMessageText();
     }
+    
+    // Listen for animation stop signal using GetX worker
+    _animationStopWorker = ever(_chatController.animationStopped, (stopped) {
+      if (stopped && mounted && _typingTimer != null) {
+        _stopTypingAnimation();
+      }
+    });
   }
 
   @override
   void dispose() {
     _typingTimer?.cancel();
+    _animationStopWorker?.dispose();
     super.dispose();
+  }
+  
+  void _stopTypingAnimation() {
+    _typingTimer?.cancel();
+    _typingTimer = null;
+    // Show full text immediately
+    if (mounted) {
+      setState(() {
+        _displayText = _getMessageText();
+        _currentIndex = _displayText.length;
+      });
+    }
   }
 
   void _startTypingAnimation() {
@@ -54,6 +79,12 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   void _typeNextChar(String fullText) {
+    // Check if animation was stopped
+    if (_chatController.animationStopped.value) {
+      _stopTypingAnimation();
+      return;
+    }
+    
     if (_currentIndex >= fullText.length) {
       return;
     }
@@ -71,7 +102,11 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
 
     _typingTimer = Timer(delay, () {
-      _typeNextChar(fullText);
+      if (mounted && !_chatController.animationStopped.value) {
+        _typeNextChar(fullText);
+      } else if (_chatController.animationStopped.value) {
+        _stopTypingAnimation();
+      }
     });
   }
 

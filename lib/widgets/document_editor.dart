@@ -73,6 +73,8 @@ class _DocumentEditorState extends State<DocumentEditor> with SingleTickerProvid
   late Animation<Offset> _aiPanelSlideAnimation;
   late Animation<double> _aiPanelFadeAnimation;
   Timer? _markdownPreviewTimer;
+  DateTime? _lastSaveTime; // Track when document was last saved
+  String _savedContent = ''; // Track the content that was last saved
 
   @override
   void initState() {
@@ -80,6 +82,7 @@ class _DocumentEditorState extends State<DocumentEditor> with SingleTickerProvid
     try {
       _contentController = TextEditingController(text: widget.documentContent);
       _currentDocumentId = widget.documentId; // Initialize with provided documentId
+      _savedContent = widget.documentContent; // Initialize saved content
       _contentController.addListener(_onContentChanged);
       
       // Initialize AI panel animation
@@ -112,8 +115,15 @@ class _DocumentEditorState extends State<DocumentEditor> with SingleTickerProvid
   }
 
   void _onContentChanged() {
-    if (!_hasChanges && mounted) {
+    // Check if content actually changed from saved content
+    final currentContent = _contentController.text;
+    final hasActualChanges = currentContent != _savedContent;
+    
+    if (hasActualChanges && !_hasChanges && mounted) {
       setState(() => _hasChanges = true);
+    } else if (!hasActualChanges && _hasChanges && mounted) {
+      // Content was reverted to saved state
+      setState(() => _hasChanges = false);
     }
     
     // Hide markdown preview while typing
@@ -234,7 +244,11 @@ class _DocumentEditorState extends State<DocumentEditor> with SingleTickerProvid
         }
         
         if (mounted) {
-          setState(() => _hasChanges = false);
+          setState(() {
+            _hasChanges = false;
+            _lastSaveTime = DateTime.now();
+            _savedContent = content; // Update saved content
+          });
           Get.snackbar('Success', 'Document saved successfully',
             snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.green[100], colorText: Colors.green[800],
             duration: const Duration(seconds: 2));
@@ -259,7 +273,26 @@ class _DocumentEditorState extends State<DocumentEditor> with SingleTickerProvid
   }
 
   Future<bool> _onWillPop() async {
-    if (!_hasChanges) return true;
+    // Check if there are actual changes from saved content
+    final currentContent = _contentController.text;
+    final hasActualChanges = currentContent != _savedContent;
+    
+    // If cursor is present but no actual changes and there was a recent save, don't show dialog
+    final bool hasFocus = _contentFocusNode.hasFocus;
+    final bool hasRecentSave = _lastSaveTime != null && 
+        DateTime.now().difference(_lastSaveTime!).inSeconds < 30; // Consider "recent" as within 30 seconds
+    
+    if (!hasActualChanges) {
+      // No actual changes, allow pop
+      return true;
+    }
+    
+    // If cursor is present but there was a recent save and content matches saved content, allow pop
+    if (hasFocus && hasRecentSave && !hasActualChanges) {
+      return true;
+    }
+    
+    // Show dialog only if there are actual changes
     final bool? shouldPop = await showDialog<bool>(context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),

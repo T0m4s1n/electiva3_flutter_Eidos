@@ -3,6 +3,7 @@ import 'package:lottie/lottie.dart';
 import 'package:get/get.dart';
 import '../controllers/chat_controller.dart';
 import '../models/chat_models.dart';
+import '../services/translation_service.dart';
 import 'message_widgets.dart';
 import 'animated_icon_background.dart';
 
@@ -273,8 +274,8 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
             const SizedBox(height: 24),
 
             // Welcome message
-            Text(
-              'Welcome to your new chat!',
+            Obx(() => Text(
+              TranslationService.translate('welcome_to_new_chat'),
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 22,
@@ -282,14 +283,14 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                 color: Theme.of(context).colorScheme.onSurface,
               ),
               textAlign: TextAlign.center,
-            ),
+            )),
 
             const SizedBox(height: 12),
 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                'Start typing your message below to begin our conversation',
+              child: Obx(() => Text(
+                TranslationService.translate('start_typing_message'),
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 15,
@@ -298,7 +299,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                       : Colors.grey,
                 ),
                 textAlign: TextAlign.center,
-              ),
+              )),
             ),
 
             const SizedBox(height: 32),
@@ -361,8 +362,8 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    'Create Document',
+                  Obx(() => Text(
+                    TranslationService.translate('create_document'),
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 18,
@@ -371,10 +372,10 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                  ),
+                  )),
                   const SizedBox(height: 4),
-                  Text(
-                    'Get AI-powered help to write and edit documents',
+                  Obx(() => Text(
+                    TranslationService.translate('create_document_description'),
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 13,
@@ -382,7 +383,7 @@ class _ChatViewState extends State<ChatView> with TickerProviderStateMixin {
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                  ),
+                  )),
                 ],
               ),
             ),
